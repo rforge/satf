@@ -5,14 +5,45 @@
 
 using namespace Rcpp;
 
-// rcpp_hello_world
-List rcpp_hello_world();
-RcppExport SEXP satf_rcpp_hello_world() {
+// rcpp_initialize_logLikFn
+LogicalVector rcpp_initialize_logLikFn(List& params);
+RcppExport SEXP satf_rcpp_initialize_logLikFn(SEXP paramsSEXP) {
 BEGIN_RCPP
     SEXP __sexp_result;
     {
         Rcpp::RNGScope __rngScope;
-        List __result = rcpp_hello_world();
+        Rcpp::traits::input_parameter< List& >::type params(paramsSEXP );
+        LogicalVector __result = rcpp_initialize_logLikFn(params);
+        PROTECT(__sexp_result = Rcpp::wrap(__result));
+    }
+    UNPROTECT(1);
+    return __sexp_result;
+END_RCPP
+}
+// rcpp_deinitialize_logLikFn
+LogicalVector rcpp_deinitialize_logLikFn();
+RcppExport SEXP satf_rcpp_deinitialize_logLikFn() {
+BEGIN_RCPP
+    SEXP __sexp_result;
+    {
+        Rcpp::RNGScope __rngScope;
+        LogicalVector __result = rcpp_deinitialize_logLikFn();
+        PROTECT(__sexp_result = Rcpp::wrap(__result));
+    }
+    UNPROTECT(1);
+    return __sexp_result;
+END_RCPP
+}
+// rcpp_compute_logLikFn
+DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs, DoubleVector& fixed_coefs);
+RcppExport SEXP satf_rcpp_compute_logLikFn(SEXP coefsSEXP, SEXP fixed_coefsSEXP) {
+BEGIN_RCPP
+    SEXP __sexp_result;
+    {
+        Rcpp::RNGScope __rngScope;
+        Rcpp::traits::input_parameter< DoubleVector& >::type coefs(coefsSEXP );
+        Rcpp::traits::input_parameter< DoubleVector& >::type fixed_coefs(fixed_coefsSEXP );
+        DoubleVector __result = rcpp_compute_logLikFn(coefs, fixed_coefs);
         PROTECT(__sexp_result = Rcpp::wrap(__result));
     }
     UNPROTECT(1);
