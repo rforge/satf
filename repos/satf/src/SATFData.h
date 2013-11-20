@@ -1,6 +1,7 @@
 #ifndef __SATF_DATA_H__
 #define __SATF_DATA_H__
 #include <Rcpp.h>
+#include "debug.h"
 
 enum enumRVType {
   rv_binary = 1,
@@ -8,93 +9,114 @@ enum enumRVType {
   rv_dprime = 3
 };
 
-class CSATFResponseVariable {
 
+class CSATFResponseVariable {
   public:
-    CSATFResponseVariable(Rcpp::List& params);
+    CSATFResponseVariable(DoubleVector& predicted_criterion, 
+                          CharacterVector& dv, CharacterVector& cnames,
+                          DataFrame& data);
+                          
     inline enumRVType GetRVType() {return mRVType; }
     inline double PredictedCriterion(int idx) {return mPredictedCriterion[idx]; }
 
     // response variable 1
     inline int ResponseYes(int idx) {return mResponseYes[idx]; }
     inline int TrialId(int idx) {return mTrialId[idx]; }
-    inline bool HasTrialId() {return mTrialId.length() != 0; }
+    inline bool HasTrialId() {return mTrialId.size() > 0; }
 
     // response variable 2
     inline int ResponseDprime(int idx) {return mResponseDprime[idx]; }
 
     // response variable 3
-    inline int ResponseHits(int idx) {return mResponseHits[idx]; }
-    inline int NGrammatical(int idx) {return mnGrammatical[idx]; }
-    inline int ResponseFAs(int idx) {return mResponseFAs[idx]; }
-    inline int NUngrammatical(int idx) {return mnUngrammatical[idx]; }
+    inline int NResponsesYes(int idx) {return mnResponsesYes[idx]; }
+    inline int NResponses(int idx) {return mnResponses[idx]; }
 
-  private:
+//  private:
+    public:
     enumRVType mRVType;
     Rcpp::DoubleVector mPredictedCriterion;
 
     // response variable 1
-    Rcpp::IntegerVector mResponseYes;
-    Rcpp::IntegerVector mTrialId;
+    std::vector<int> mResponseYes;
+    std::vector<int> mTrialId;
     
     // response variable 2
-    Rcpp::DoubleVector mResponseDprime;
+    std::vector<double> mResponseDprime;
     
     // response variable 3
-    Rcpp::IntegerVector mResponseHits;
-    Rcpp::IntegerVector mnGrammatical;
-    Rcpp::IntegerVector mResponseFAs;
-    Rcpp::IntegerVector mnUngrammatical;
+    IntegerVector mnResponsesYes;
+    IntegerVector mnResponses;
+
+    _dbg_class_init;
 };
 
-class CSATFDesignMatrix 
+class CSATFDesignMatrix
 {
   public:
-    CSATFDesignMatrix(Rcpp::List& params);
-    inline int NCoefs() { return mDM.nrow(); }
-    inline int NDatapoints() {return mDM.ncol(); }
+    typedef enum {
+      parameter_lambda = 0,
+      parameter_beta  = 1,
+      parameter_delta  = 2,
+      parameter_invalid = 3
+    } Parameter;
     
-    double ComputeDprime(Rcpp::DoubleVector& coefs, int datapoint_index, double time);
+  public:
+    CSATFDesignMatrix(Rcpp::List& contrasts, Rcpp::DataFrame& data, Rcpp::CharacterVector& cnames);
+    inline size_t nCoefs() { return mDM.ncol(); }
+    inline size_t nDatapoints() {return mDM.nrow(); }
+    
+    double ComputeDprime(std::vector<double>& coefs, int datapoint_index, double time);
 
-    double GetParam(Rcpp::IntegerVector& rows, int datapoint_index, Rcpp::DoubleVector& coefs);  
-  
-  private:
+    double GetParameter(Parameter parameter, int datapoint_index, std::vector<double>& coefs);
+    
+    Parameter StringToParameter(std::string& name);
+
+//  private:
+    public:
     Rcpp::NumericMatrix mDM;
     
-    Rcpp::IntegerVector mRowsLambda; 
-    Rcpp::IntegerVector mRowsBeta; 
-    Rcpp::IntegerVector mRowsDelta;
+    std::vector<int> mCoefIndexFirst;
+    std::vector<int> mCoefIndexLast;
+    
+    unsigned int mnCoefs;
+    unsigned int mnDatapoints;
+
+    _dbg_class_init;
 };
 
 class CSATFData 
 {
   public:
-    CSATFData( Rcpp::List& params);
-    double ObjectiveFunction(Rcpp::DoubleVector& coefs, Rcpp::DoubleVector& fixed_coefs);
+    CSATFData(Rcpp::CharacterVector& dv, Rcpp::List& contrasts,
+              Rcpp::NumericMatrix& coef_constraints, DataFrame& data, 
+              Rcpp::DoubleVector& predicted_criterion, 
+              Rcpp::CharacterVector& cnames);
+    ~CSATFData();
     
-  private:  
-    void CoefsTransform(Rcpp::DoubleVector& coefs, Rcpp::IntegerVector& transform_vec, 
-      		              Rcpp::DoubleVector& minimum, Rcpp::DoubleVector& maximum);
-    double CoefsLL(Rcpp::DoubleVector& coefs);
-
-    double ObjectiveFunction_Binary(DoubleVector& coefs);
-    double ObjectiveFunction_Aggregate(DoubleVector& coefs);
-
+    double ObjectiveFunction(Rcpp::DoubleVector& coefs);
+    
+    std::vector<double> TransformCoefs(Rcpp::DoubleVector& coefs, bool back=false);
+    
   private:
-    Rcpp::DoubleVector mFixedparams;
-    
+    double TransformCoef(double raw_coefs, int i, bool back);
+    double CoefsLL(std::vector<double>& coefs);
+
+    double ObjectiveFunction_Binary(std::vector<double>& coefs);
+    double ObjectiveFunction_Aggregate(std::vector<double>& coefs);
+
+//  private:
+  public:
     CSATFDesignMatrix mDM;
-    int mnCoefs;  int mnDatapoints;
-    
-    Rcpp::IntegerVector mTransformVec;
-    Rcpp::DoubleVector mParamsMinimum;
-    Rcpp::DoubleVector mParamsMaximum;
-    
-    Rcpp::DoubleVector mTime;
-
-    Rcpp::NumericMatrix mHyperparams;
-
     CSATFResponseVariable mRV;
+    std::vector<double> mTime;
+    Rcpp::NumericMatrix mHyperparams;
+    
+    Rcpp::DoubleVector mParametersLower;
+    Rcpp::DoubleVector mParametersUpper;
+    
+    std::vector<int> mDbgTime;
+    
+    _dbg_class_init;
 };
 
 #endif // __SATF_DATA_H__

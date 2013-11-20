@@ -16,124 +16,141 @@ encode.trial.noise <- function(p) log(( (p-trial.noise.range[1])/diff(trial.nois
 NumSmallest <- -.Machine$double.xmax
 NumLargest <- .Machine$double.xmax
 
-init.satf.params <- function(start, lambda, beta, delta,
-                       pslope.lambda=FALSE, pslope.beta=FALSE, pslope.delta=FALSE, 
-                       nslope.lambda=FALSE, nslope.beta=FALSE, nslope.delta=FALSE,
-                       min.slope.lambda=NumSmallest, min.slope.beta=NumSmallest, min.slope.delta=NumSmallest,
-                       max.slope.lambda=NumLargest, max.slope.beta=NumLargest, max.slope.delta=NumLargest,
-                       ...)
-{
-  stopifnot(!is.null(start))
-  stopifnot(!(pslope.lambda==T && nslope.lambda==T))
-  stopifnot(!(pslope.beta  ==T && nslope.beta  ==T))
-  stopifnot(!(pslope.delta ==T && nslope.delta ==T))
-  
-  cslope.lambda <- pslope.lambda || nslope.lambda
-  cslope.beta <- pslope.beta  || nslope.beta
-  cslope.delta <- pslope.delta || nslope.delta
-  
-  # convert into vector format if necessary
-  if(is.list(start)) {
-    start <- c(start$satf.params, start$crit.params, start$repeat.params)
-  }
 
-  start <- start[!is.na(start)]
+
+
+init.satf.params <- function(start, contrasts, constraints) {
+
+  reportifnot(is.vector(start) && !is.list(start), "Parameter 'start' needs to be a vector.")
+  reportifnot(!is.null(start) || !any(is.na(start)), "Parameter 'start' was not provided or containts NAs.")
+
+  start.coreparams <- start[names(contrasts)]
+  reportifnot(!any(is.na(start.coreparams)), sprintf("Parameter 'start' needs to contain start values for: %s", 
+                                        paste(names(contrasts), collapse=", ") ))
+
   # init all necessary satf parameters
-  newstart <- c(start[c('lambda','beta','delta')],
-             add.params(lambda,'lambda', start, 0),
-             add.params(beta,'beta', start, 0),
-             add.params(delta,'delta', start, 0))
-  remainingstart <- start[ -which(names(newstart) %in% names(start)) ]
+  newstart <- start.coreparams
+  for(name in names(contrasts))
+    newstart <- c(newstart, add.params(contrasts[[name]], name, start, 0))
+
+  # not sure what the following line is supposed to do
+  # remainingstart <- start[ -which(names(newstart) %in% names(start)) ]
   start <- newstart
 
-  # set transformation flags
-  constrained <- c(T, T, T, rep(cslope.lambda, n.terms(lambda)), rep(cslope.beta, n.terms(beta)), rep(cslope.delta, n.terms(delta)))
-  sgn <- c(F, F, F, rep(nslope.lambda, n.terms(lambda)), rep(nslope.beta, n.terms(beta)), rep(nslope.delta, n.terms(delta)))
-  sgn <- -(as.integer(sgn)-.5)*2
+  # set default constraints for intercepts
+  for(name in names(contrasts))
+    constraints <- default(constraints, name, c(0,Inf))
 
-  minima <- c(rep(0, 3), rep(min.slope.lambda, n.terms(lambda)),
-               rep(min.slope.beta, n.terms(beta)),
-               rep(min.slope.delta, n.terms(delta)))
-  maxima <- c(rep(NumLargest, 3), rep(max.slope.lambda, n.terms(lambda)),
-               rep(max.slope.beta, n.terms(beta)),
-               rep(max.slope.delta, n.terms(delta)))
+  # initialize constraint matrix
+  constraint.matrix <- matrix(c(-Inf, Inf), nrow=length(start), ncol=2, byrow=TRUE, 
+                              dimnames=list(names(start), c('lower', 'upper')))
 
-  start.constrained.sign <- start!=0 & constrained
-  if(!(all(sign(start[start.constrained.sign]) == sgn[start.constrained.sign]))) {
-    print("One of the starting values contradicts the constraints.")
-    stop()
-    warning("One of the starting values contradicts the constraints.")
+  is.match <- function(expr, name) regexpr(paste0('^',expr,'$'), text=name) > 0
+  find.match <- function(name) {
+    for(expr in names(constraints)) {
+      if(is.match(expr, name)) {
+        return(constraints[[expr]])
+      }
+    }
     return(NULL)
   }
 
-  # transform the appropriate starting values
-  start[constrained] <- start[constrained]*sgn[constrained]
-  start[constrained] <- sqrt(start[constrained])
-  
-  # determine transformation
-  transform.fn <- function(params) {
-    n.extend <- length(params)-length(constrained)
-    constrained <- c(constrained, rep(F, n.extend))
-    sgn <- c(sgn, rep(1, n.extend))
-    params[constrained] <- (params[constrained])^2
-    params*sgn
-  }
-  
-  # add the non-satf starting values
-  if(length(remainingstart)) {
-    overlap <- names(remainingstart) %in% names(start)
-    if(any(overlap)) {
-      overlap.txt <- paste("'", names(remainingstart)[overlap], "'", collapse=",")
-      warning.msg <- paste("Ignoring start values for:", overlap.txt)
-      warning(warning.msg)
-      remainingstart <- remainingstart[!overlap]
+  # fill the constraints matrix
+  for(name in names(start)) {
+    val <- find.match(name)
+    if(!is.null(val)) {
+      constraint.matrix[name,] <- val
     }
-    start <- c(start, remainingstart)
   }
 
-  list(start=start, transform.fn=transform.fn, transform.vec=constrained*sgn,
-       params.minimum=minima, params.maximum=maxima)
+  tmp <- cbind(start, constraint.matrix)
+  allwithinlimits <- all( tmp[,'start'] >= tmp[,'lower'] & tmp[,'start'] <= tmp[,'upper'] )
+  if( !allwithinlimits ) {
+    print(tmp)
+    stop("Start parameters are not within limits.")
+  }
+  return(list(constraints=constraint.matrix, start=start));
 }
 
 
-satf  <- function(dv, signal, lambda, beta, delta, start, data, metric,
-                  control=list(), plot=FALSE, ...)
-{
-  stopifnot(metric %in% c('RMSD','R2','adjR2','logLik','logLikRaw'))
-  init <- init.satf.params(start=start, lambda, beta, delta, ...)
-  if(is.null(init))
-    return(NULL)
-  
-  # init default control parameters
-  control <- default(control, 'correction.fraction', .01)
-  control <- default(control, 'plot.dprime', plot)
-  control <- default(control, 'plot.criterion', FALSE)
-  control <- default(control, 'plot.action', 'plot')
-  #control <- default(control, 'crit.spline.step', 0.1)
-  control <- default(control, 'condition', ~condition)
-  control <- default(control, 'interval', ~interval)
-  control <- default(control, 'time', ~time)
+# translate parameters from formula notation to string notation,
+# and check that all columns actually exist
+# TODO: This function must be rather slow, optimize.
 
-  # init default control parameters
-  control$condition <- formula.terms(control$condition)
-  control$time <- formula.terms(control$time)
+translate.parameters  <- function(data, dv, start, contrasts, constraints, 
+                                  bias, signal, time, trial.id, summarize) {
   
-  if(metric=='logLikRaw') {
-    res <- Fit.SATF.RawBinomial( dv=dv, signal=signal, start=init$start,
-                                lambda=lambda, beta=beta, delta=delta,
-                                transform.fn=init$transform.fn,
-                                transform.vec=init$transform.vec,
-                                params.minimum=init$params.minimum,
-                                params.maximum=init$params.maximum,
-                                data=data, control=control, ...)
+  cnames <- list()
+  satf.params <- init.satf.params(start=start, contrasts=contrasts, constraints=constraints)
+  
+  # TRANSLATE PARAMETER: dv
+  if('response' %in% names(dv)) {
+    dv[['response']] <- check.formula.for.colname(data, 'dv$response', dv$response)
+    stopifnot.binary( data[, dv[['response']] ] )
+    
+  } else if( all(c('n.responses.yes','n.responses') %in% names(dv)) ) {
+    for(name in names(dv))
+      dv[[name]] = check.formula.for.colname(data, paste('dv', name, sep='$'), dv[[name]])
+    
   } else {
-    res <- Fit.SATF.Aggregate(start=init$start, transform.fn=init$transform.fn,
-                              transform.vec=init$transform.vec,
-                              params.minimum=init$params.minimum,
-                              params.maximum=init$params.maximum,
-                              lambda=lambda, beta=beta, delta=delta,
-                              data=data, metric=metric, control=control, ...)
+    stop("No such dv implemented.")
+    
   }
+  dv <- unlist(dv)
+  
+  # TRANSLATE PARAMETER: contrasts
+  for(name in names(contrasts))
+    contrasts[[name]] = check.formula.for.colname(data, paste('contrasts', name, sep='$'), contrasts[[name]], n.cols=NA)
+
+  # TRANSLATE PARAMETER: bias
+  reportifnot(all(c('bias', 'poly.degree') %in% names(bias)), "Parameter 'bias' needs to containt 'bias' and 'poly.degree'.")
+  bias[['bias']] = check.formula.for.colname(data, 'bias$bias', bias[['bias']], n.cols=NA)
+  
+  # CHECK COLUMN NAMES: signal, time, trial.id
+  cnames$signal <- check.formula.for.colname(data, 'signal', signal)
+  stopifnot.binary( data[,cnames$signal] )
+    
+  cnames$time <- check.formula.for.colname(data, 'time', time)
+
+  if(!is.null(trial.id))
+    cnames$trial.id <- check.formula.for.colname(data, 'trial.id', trial.id)
+
+  # RETURN
+  list(dv=dv, start=satf.params$start, contrasts=contrasts, bias=bias,
+       constraints=satf.params$constraints, cnames=unlist(cnames) )
+}
+                  
+satf  <- function(dv, signal, start, contrasts, data, time, metric, bias, 
+                  trial.id=NULL, summarize=list(),
+                  constraints=list(), control=list(), plot=FALSE, optim.control=list(), ...)
+{
+  metric.permissible <- c('RMSD','R2','adjR2','logLik','logLikRaw')
+  reportifnot(metric %in% metric.permissible, sprintf("'metric' has to be one of: %s", paste(metric.permissible, collapse=", ")))
+
+  # init default parameters
+  optim.control <- default(optim.control, 'maxit', 10^6)
+
+##  control <- default(control, 'correction.fraction', .01)
+##  control <- default(control, 'plot.dprime', plot)
+##  control <- default(control, 'plot.criterion', FALSE)
+##  control <- default(control, 'plot.action', 'plot')
+##  control <- default(control, 'condition', ~condition)
+##  control <- default(control, 'interval', ~interval)
+##  control <- default(control, 'time', ~time)
+
+##  # init default control parameters
+##  control$condition <- formula.terms(control$condition)
+##  control$time <- formula.terms(control$time)
+  
+  # check parameters
+  params <- translate.parameters(data=data, dv=dv, start=start, contrasts=contrasts, 
+                                 constraints=constraints, bias=bias, signal=signal, 
+                                 time=time, trial.id=trial.id, summarize=summarize)
+  
+  
+  res <- satf.rawbinomial( dv=params$dv, start=params$start, contrasts=params$contrasts, 
+                           constraints=params$constraints, bias=params$bias, data=data, control=control, 
+                           optim.control=optim.control, cnames=params$cnames, ...)
   return(res)
 }
 

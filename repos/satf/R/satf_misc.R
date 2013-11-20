@@ -3,6 +3,11 @@ stopifnot.binary <- function(x) stopifnot( all(x %in% c(0,1)) )
 stopifnot.binary.na <- function(x) stopifnot( all(x %in% c(0,1,NA)) )
 
 
+reportifnot <- function(cond, text) {
+  if(!cond)
+    stop(text)
+}
+
 remove.outliers <- function(x, factor) {
   distance <- abs(mean(x)-x);
   x <- x[order(distance, decreasing=T)];

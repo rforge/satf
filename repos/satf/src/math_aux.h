@@ -4,17 +4,19 @@
 #include <Rcpp.h>
 
 inline double logodds2p(double lodds) { return( exp(lodds)/(1+exp(lodds)) ); }
-inline double _dnorm(double x, double mu=0.0, double sigma=1.0, bool lg=false)        { return ::Rf_dnorm4(x, mu, sigma, lg?1:0); }
-inline double _pnorm(double x, double mu=0.0, double sigma=1.0, bool lt=false, int lg=false) { return ::Rf_pnorm5(x, mu, sigma, lt?1:0, lg?1:0); }
-inline double _dgamma(double x, double shp, double scl, bool lg=false)         { return ::Rf_dgamma(x, shp, scl, lg?1:0); }
-inline double _dbinom(double x, double n, double p, bool lg=false)         { return ::Rf_dbinom(x, n, p, lg?1:0); }
+inline double _dnorm(double x, double mu=0.0, double sigma=1.0, bool lg=false) { return ::Rf_dnorm4(x, mu, sigma, lg?1:0); }
+inline double _pnorm(double x, double mu=0.0, double sigma=1.0, bool lt=true, int lg=false) { return ::Rf_pnorm5(x, mu, sigma, lt?1:0, lg?1:0); }
+inline double _dgamma(double x, double shp, double scl, bool lg=false) { return ::Rf_dgamma(x, shp, scl, lg?1:0); }
+inline double _dbinom(double x, double n, double p, bool lg=false)     { return ::Rf_dbinom(x, n, p, lg?1:0); }
 
 // inline int index(int row, int col, int nRows) {
 //    return( (col*nRows + row)-1 );
 // }
 
 inline double SATF(double t, double lambda, double beta, double delta) {
-   return( (t >= delta)*(lambda*(1-exp(-(1/beta)*(t-delta)))) );
+  if(lambda == 0)
+    return 0.0;
+  return( (t >= delta)*(lambda*(1-exp(-(1/beta)*(t-delta)))) );
 }
 
 
