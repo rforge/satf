@@ -34,48 +34,44 @@ satf.criterion <- function(data, dv, bias, cnames) {
   predicted.crit
 }
 
-satf.rawbinomial <- function(dv, signal, start, contrasts, constraints, data,
-                              control, bias, cnames,
-                             corr.mrsat=FALSE, plot=FALSE, optim.digits=1, 
-                             optim.control=list(), method="Nelder-Mead", ...)
+satf.rawbinomial <- function(dv, signal, start, contrasts, constraints, data, control, bias, cnames,
+                             plot=FALSE, optim.digits=1, optim.control=list(), method="Nelder-Mead", ...)
 {
   # Check 'data' and 'dv' parameters.
   reportifnot(nrow(data) > 0, "Parameter 'data' needs to consist of several rows.")
-
-  predicted.criterion <- satf.criterion(data, dv, bias, cnames)
-    
-  # Create design matrix.
   optim.control$fnscale <- -1
 
-  initialize.compute.logLik(dv=dv, contrasts=contrasts, constraints=constraints, 
-                            data=data, predicted.criterion=predicted.criterion,
-                            cnames=cnames)
-  start = untransform.coefs(start)
-  res <- compute.logLik(params=start)
-  if(res == -Inf || res == Inf) {
-    deinitialize.compute.logLik()
-    return(NULL)
-  }
+  predicted.criterion <- satf.criterion(data, dv, bias, cnames)
+  
+  # initialize the C++ optimization routine
+  rcpp_initialize_logLikFn(dv, contrasts, constraints, 
+                            data, predicted.criterion,
+                            cnames)
+  
+  start <- rcpp_unconstrain_coefs( start )
 
-  # maximize the log-likelihood
-  res <- optim(par=start, compute.logLik, control=optim.control, method=method)  
-  
-  if(corr.mrsat == TRUE)
-  {
-    start <- c(start, trial.corr=p2logodds(.5))
-    res <- compute.logLik(start)
-    if(res == -Inf || res == Inf) {
-      return(NULL)
-    }
-    res <- optim(start, fn=compute.logLik, fixedparams=fp, control=optim.control, method=method)
+  if(length(start) == 0) {
+    return( rcpp_compute_logLikFn(start, FALSE) )
   }
   
-  res <- optim.to.precision(start, optim.digits=optim.digits, fn=compute.logLik, control=optim.control)
+  res <- rcpp_compute_logLikFn(start)
+
+  if(res == -Inf || res == Inf) {
+    rcpp_deinitialize_logLikFn()
+    stop("Got Inf or -Inf on first iteration.")
+  }  
   
-  # free all memory reserved by C for optimization
-  deinitialize.compute.logLik()
+  # fit the parameters by maximizing the likelihood
+  res <- optim(par=start, rcpp_compute_logLikFn, control=optim.control, method=method)  
   
-  res$par <- transform.coefs(res$par)
-#  res$fn.criterion <- fn.criterion
+##  # optimize a second time
+##  res <- optim(par=start, rcpp_compute_logLikFn, control=optim.control, method=method)  
+  
+  # transform the parameters into their proper (constrained) form
+  res$par <- rcpp_constrain_coefs( res$par )
+  
+  # free all memory reserved by C++
+  rcpp_deinitialize_logLikFn()
+  
   res
 }

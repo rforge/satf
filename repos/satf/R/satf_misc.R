@@ -124,7 +124,7 @@ add.params <- function(formula, letter, startpars, start=0) {
   n <- n.terms(formula)
   if(n > 0) {
     names <- paste(letter, formula.terms(formula), sep='.')
-    vec <- ifelse(!is.na(startpars[names]), startpars[names], 0)
+    vec <- ifelse(!is.na(startpars[names]), startpars[names], start)
     names(vec) <- names
     return(vec)
   }

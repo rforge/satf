@@ -1,25 +1,106 @@
 
+
 source("./satf_load.R")
 
-  fn.bias <- function(x) 0.1*x #-1/(x+2)
+  fn.bias <- function(x) 0*x #-1/(x+2)
   fn.satf <- function(t) SATF(t, lambda=3, beta=1, delta=.4)
   sim.n <- 10^3
-
   time = seq(-.5,5,.5)
-  data <- generate.sat(criterion=fn.bias, dprime=fn.satf, time=time, n=sim.n)
+  data <- generate.sat(criterion=fn.bias, dprime=fn.satf, time=time, n=sim.n, rho=.95)
+
+(p1.raw <- satf(dv=c(response=~response), signal=~signal,
+                start     = c(lambda=3, beta=1, delta=.4),
+                contrasts = c(lambda=~1, beta=~1, delta=~1), 
+                constraints=list(corr.mrsat=.95), time=~time, 
+                bias=list(bias=~1, poly.degree=10), trial.id=~trial.id,
+                data=data, metric="logLikRaw"))
+
 
   data.nyes <- satf.summarize.n.yes(data, c('interval','condition'), dv='response')
-  data.nyes
+data.nyes$dprime <- NULL
+  data.dprime <- satf.summarize.dprime(data.nyes, .(interval), signal='signal', dv=c('n.responses.yes', 'n.responses'))
+data.dprime
 
-  (p1 <- satf(dv=c(response=~response), signal=~signal,
-           start     = c(lambda=2.1, beta=1, delta=.4),
+source("./satf_load.R")
+
+  data$lambda3 <- satf(dv=c(response=~response), signal=~signal,
+           start     = c(lambda=3, beta=1, delta=.4),
            contrasts = c(lambda=~1, beta=~1, delta=~1), 
-           constraints=list(), time=~time, 
-           bias=list(bias=~1, poly.degree=10), # trial.id=~trial.id,
-           data=data, metric="logLikRaw"))
+           constraints=list(lambda=3, beta=1, delta=.4, corr.mrsat=.99), time=~time, 
+           bias=list(bias=~1, poly.degree=10), trial.id=~trial.id,
+           data=data, metric="logLikRaw")
+
+  data$lambda1 <- satf(dv=c(response=~response), signal=~signal,
+                         start     = c(lambda=3, beta=1, delta=.4),
+                         contrasts = c(lambda=~1, beta=~1, delta=~1), 
+                         constraints=list(lambda=1, beta=1, delta=.4, corr.mrsat=.99), time=~time, 
+                         bias=list(bias=~1, poly.degree=10), trial.id=~trial.id,
+                         data=data, metric="logLikRaw")
+
+  data$indep.lambda1 <- satf(dv=c(response=~response), signal=~signal,
+                          start     = c(lambda=3, beta=1, delta=.4),
+                          contrasts = c(lambda=~1, beta=~1, delta=~1), 
+                          constraints=list(lambda=1, beta=1, delta=.4), time=~time, 
+                          bias=list(bias=~1, poly.degree=10), #trial.id=~trial.id,
+                          data=data, metric="logLikRaw")
+
+  data$indep.lambda3 <- satf(dv=c(response=~response), signal=~signal,
+                           start     = c(lambda=3, beta=1, delta=.4),
+                           contrasts = c(lambda=~1, beta=~1, delta=~1), 
+                           constraints=list(lambda=3, beta=1, delta=.4), time=~time, 
+                           bias=list(bias=~1, poly.degree=10), #trial.id=~trial.id,
+                           data=data, metric="logLikRaw")
+
+sum(data$lambda1)
+sum(data$lambda3)
 
 
-  (p2 <- satf(dv=c(n.responses.yes=~n.responses.yes, n.responses=~n.responses), 
+rcpp_pnorm2d(-2.9, -2.9, .99, TRUE)/pnorm(-2.9)
+
+rcpp_pnorm2d(-2.9, -2.9, .99, TRUE)/pnorm(-2.9)
+
+data.tmp <- subset(data, lambda1 > lambda3)
+
+which.max(data.tmp$lambda1-data.tmp$lambda3)
+
+(data.tmp[2,])
+
+(subset(data, trial.id==1657))[1:10,]
+
+x1 <- with(data.tmp, tapply(paramsCorrect, list(time), sum))
+x2 <- with(data.tmp, tapply(paramsIncorr, list(time), sum))
+x1-x2
+
+rbind(x1, x2)
+
+source("./satf_load.R")
+
+rcpp_pnorm2d(-0.04, -0.04, .9999, FALSE)
+
+(p1.raw <- satf(dv=c(response=~response), signal=~signal,
+                start     = c(lambda=3, beta=1, delta=.4),
+                contrasts = c(lambda=~1, beta=~1, delta=~1), 
+                constraints=list(lambda=3, beta=1, delta=.4, corr.mrsat=.8), time=~time, 
+                bias=list(bias=~1, poly.degree=10), trial.id=~trial.id,
+                data=data, metric="logLikRaw"))
+[1] -2559
+
+(p1.raw <- satf(dv=c(response=~response), signal=~signal,
+                start     = c(lambda=3, beta=1, delta=.4),
+                contrasts = c(lambda=~1, beta=~1, delta=~1), 
+                constraints=list(), time=~time, 
+                bias=list(bias=~1, poly.degree=10), trial.id=~trial.id,
+                data=data, metric="logLikRaw"))
+
+(p1.raw <- satf(dv=c(response=~response), signal=~signal,
+                start     = c(lambda=3, beta=1, delta=.4),
+                contrasts = c(lambda=~1, beta=~1, delta=~1), 
+                constraints=list(), time=~time, 
+                bias=list(bias=~1, poly.degree=10), #trial.id=~trial.id,
+                data=data, metric="logLikRaw"))
+
+  # fit to aggregated data
+  (p1.agg <- satf(dv=c(n.responses.yes=~n.responses.yes, n.responses=~n.responses), 
            signal=~signal,
            start     = c(lambda=2.1, beta=1, delta=.4),
            contrasts = c(lambda=~1, beta=~1, delta=~1), 
@@ -28,25 +109,46 @@ source("./satf_load.R")
            data=data.nyes, metric="logLik"))
 
 
-x <- ddply(subset(data, subset=signal==0), .(interval), function(d) {c(time=mean(d$time), response=mean(d$response))})
-with(x, plot(time, response))
+  data.mr <- generate.mrsat(fn.satf1=fn.satf, fn.satf2=NULL, fn.bias=fn.bias, time=time,
+                           n.signal=10^3, n.noise=10^3, processing.noise.sd=0.5)
+  data.mr <- data.mr[,c('trial.id','interval','time','condition','signal','response')]
+head(data.mr)
+  data.mr.nyes <- satf.summarize.n.yes(data.mr, c('interval','condition'), dv='response')
+head(data.mr.nyes)
 
-data$time <- jitter(data$time)
-with(, plot(response ~ time) )
+  data.mr.dprime <- satf.summarize.dprime(data.mr.nyes, .(interval), signal='signal', 
+                                       dv=c('n.responses.yes', 'n.responses'))
+data.mr.dprime
 
-(m <- lm(response ~ poly(time,5) , data, subset=signal==0))
-plot(predict(m, data.frame(time=seq(0,6,.1))))
+source("./satf_load.R")
 
-terms(~low(.0)+high)
+  # fit to raw data
+  (p.mr.raw1 <- satf(dv=c(response=~response), signal=~signal,
+           start     = c(lambda=2.1, beta=1, delta=.4),
+           contrasts = c(lambda=~1, beta=~1, delta=~1), 
+           constraints=list(corr.mrsat=.7), time=~time, 
+           bias=list(bias=~1, poly.degree=10), trial.id=~trial.id,
+           data=data.mr, metric="logLikRaw"))
+[1] -16280
 
-x.d <- aggregate.dprime(data)
-ggplot(x.d, aes(x=time, y=dprime, color=condition))+geom_point()
+  # fit to raw data
+  (p.mr.raw2 <- satf(dv=c(response=~response), signal=~signal,
+                  start     = c(lambda=2.1, beta=1, delta=.4),
+                  contrasts = c(lambda=~1, beta=~1, delta=~1), 
+                  constraints=list(corr.mrsat=1), time=~time, 
+                  bias=list(bias=~1, poly.degree=10), trial.id=~trial.id,
+                  data=data1, metric="logLikRaw"))
 
-  fn <- function(t) logodds2p(RepeatProbPoly(t, p$par$repeat.params))
-  plot(fn, xlim=c(-1,6))
-  
-  tail(data)
-  
+
+  (p.mr.agg <- satf(dv=c(n.responses.yes=~n.responses.yes, n.responses=~n.responses),
+                  signal=~signal,
+                  start     = c(lambda=3, beta=1, delta=.4),
+                  contrasts = c(lambda=~1, beta=~1, delta=~1), 
+                  constraints=list(), time=~time, 
+                  bias=list(bias=~1, poly.degree=10), #trial.id=~trial.id,
+                  data=data.mr.nyes, metric="logLikRaw"))
+
+
   start.parameters <- function(data.aggregated) {
     time.max.proportion <- .95 # Assume that 95% of the asymptote is reached 
     # at the last available point in time.

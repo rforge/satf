@@ -1,35 +1,52 @@
 
-generate.sat.condition <- function(criterion, dprime, time, trial.ids, label)
+process.arg <- function(arg, time) {
+  if(typeof(arg) == "closure") arg = arg(time)
+  if(length(arg) == 1 ) arg = rep(arg, length(time))
+  stopifnot(length(arg) == length(time) )
+  arg
+}
+
+generate.sat.condition.old <- function(criterion, dprime, time, trial.ids, label)
 {
   intervals <- 1:length(time)
   # fn.bias specifies the bias between the noise and signal1 distributions.
   #  The location of the criterion is computed from this bias. 
-  process.arg <- function(arg) {
-      if(typeof(arg) == "closure") arg = arg(time)
-      if(length(arg) == 1 ) arg = rep(arg, length(time))
-      stopifnot(length(arg) == length(time) )
-      arg
-  }
-  criterion <- process.arg(criterion)
-  dprime <- process.arg(dprime)
+  criterion <- process.arg(criterion, time)
+  dprime <- process.arg(dprime, time)
 
   pYes = 1-pnorm(criterion, mean=dprime)
   pYes = rep(pYes, length(trial.ids))
   response = rbinom(length(pYes), size=1, prob=pYes)
   data.frame(condition=label, interval=intervals, time=time, 
-             trial.id=trial.ids, response=response)
+             trial.id=rep(trial.ids, each=length(time)), response=response)
 }
 
-generate.sat <- function(criterion, dprime, time, n) {
-  data0 <- generate.sat.condition(criterion=criterion, dprime=0, 
-                                  time=time, trial.ids=1:n, label="condition1")
-  data1 <- generate.sat.condition(criterion=criterion, dprime=dprime, 
-                                  time=time, trial.ids=n+1:n, label="condition1")
+generate.sat.condition <- function(criterion, dprime, time, trial.ids, label, rho=0)
+{
+  intervals <- 1:length(time)
+  # fn.bias specifies the bias between the noise and signal1 distributions.
+  #  The location of the criterion is computed from this bias. 
+  criterion <- process.arg(criterion, time)
+  dprime <- process.arg(dprime, time)
+  data <-   data.frame( condition=label, interval=intervals, time=time, 
+                        trial.id=rep(trial.ids, each=length(time)), 
+                        dprime=dprime, criterion=criterion )
+  data$noise <- rnorm( nrow(data) )
+  data$noise = rcpp_correlate(data$trial.id, data$noise, rho)
+  data$dprime.cur <- data$dprime + data$noise
+  data$response <- data$dprime.cur > data$criterion
+  data
+}
+
+generate.sat <- function(criterion, dprime, time, n, rho=0) {
+  data0 <- generate.sat.condition(criterion=criterion, dprime=0, time=time, 
+                                  trial.ids=1:n, label="condition1", rho=rho)
   data0$signal <- 0
+  data1 <- generate.sat.condition(criterion=criterion, dprime=dprime,  time=time, 
+                                  trial.ids=1:n+n, label="condition1", rho=rho)
   data1$signal <- 1
   rbind(data0, data1)
 }
-
 
 generate.mrsat2 <- function(fn.satf1, fn.satf2, fn.bias, time, 
                            n.signal, n.noise, processing.noise.sd=0)

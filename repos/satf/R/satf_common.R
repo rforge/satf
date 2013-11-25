@@ -64,28 +64,4 @@ satf.summarize.dprime <- function(data, ids, signal, dv=NULL) {
   res
 }
 
-initialize.compute.logLik  <- function(dv, contrasts, constraints, data, predicted.criterion, cnames)
-{
-  rcpp_initialize_logLikFn(dv, contrasts, constraints, data, predicted.criterion, cnames)
-}
 
-deinitialize.compute.logLik <- function() {
-  rcpp_deinitialize_logLikFn( )
-}
-
-compute.logLik <- function(params)
-{
-  rcpp_compute_logLikFn(params)
-}
-
-transform.coefs <- function( coefs ) {
-  res <- rcpp_transform_coefs( coefs )
-  names(res) <- names( coefs )
-  res
-}
-
-untransform.coefs <- function( coefs ) {
-  res <- rcpp_untransform_coefs( coefs )
-  names(res) <- names( coefs )
-  res
-}

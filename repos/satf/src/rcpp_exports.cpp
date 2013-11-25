@@ -3,6 +3,7 @@
 using namespace Rcpp;
 #include <stdio.h>
 #include "SATFData.h"
+#include "math_aux.h"
 
 static CSATFData *zzz=NULL;
 
@@ -20,37 +21,46 @@ LogicalVector rcpp_initialize_logLikFn(CharacterVector& dv,
 // [[Rcpp::export]]
 LogicalVector rcpp_deinitialize_logLikFn() {
 	delete zzz;
+	zzz = NULL;
     return Rcpp::wrap(true);
 }
 
 // [[Rcpp::export]]
-DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs) {
-/*	clock_t t = clock();
+DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs, bool by_row=false) {
+    return Rcpp::wrap(zzz->ObjectiveFunction(coefs, by_row) );
+}
 
-	DoubleVector x;
-	for(int i=0; i < 200; i++) {
-		x = zzz->ObjectiveFunction(coefs);
-	}
+// [[Rcpp::export]]
+DoubleVector rcpp_constrain_coefs(DoubleVector& coefs) {
+    return Rcpp::wrap(zzz->ConstrainCoefs(coefs, true));
+}
 
-	double ft = ((float)(clock()-t))/CLOCKS_PER_SEC;
-	printf("ticks <%f> sec\n\n", ft);
+// [[Rcpp::export]]
+DoubleVector rcpp_unconstrain_coefs(DoubleVector& coefs) {
+    return Rcpp::wrap(zzz->UnconstrainCoefs(coefs));
+}
+
+// [[Rcpp::export]]
+DoubleVector rcpp_pnorm2d(DoubleVector& x_lower, DoubleVector& y_lower, DoubleVector& rho, LogicalVector& order) {
+    return Rcpp::wrap(pnorm2d(x_lower[0], y_lower[0], rho[0], order[0]));
+}
+
+// [[Rcpp::export]]
+DoubleVector rcpp_correlate(IntegerVector& trial_id, DoubleVector& noise, DoubleVector& rho_vec) {
+    double rho = rho_vec[0];
+    for(int i=1; i < trial_id.length(); i++) {
+      if(trial_id[i-1] == trial_id[i])
+        noise[i] = noise[i-1]*rho + noise[i]*sqrt(1-pow(rho,2));
+    }
+  return Rcpp::wrap(noise);
+}
+
+/*
+// [[Rcpp::export]]
+void rcpp_add_coefficient(DoubleVector& lower, DoubleVector& upper, CharacterVector& name) {
+  std::string name_str = as<std::string>(name[0]);
+  zzz->AddCoefficient((double)lower[0], (double)upper[0], name_str );
+}
 */
-    return Rcpp::wrap(zzz->ObjectiveFunction(coefs) );
-}
-
-// [[Rcpp::export]]
-DoubleVector rcpp_transform_coefs(DoubleVector& coefs) {
-    return Rcpp::wrap(zzz->TransformCoefs(coefs, false));
-}
-
-// [[Rcpp::export]]
-DoubleVector rcpp_untransform_coefs(DoubleVector& coefs) {
-    return Rcpp::wrap(zzz->TransformCoefs(coefs, true));
-}
-
-// [[Rcpp::export]]
-List rcpp_xxx() {
-    return Rcpp::wrap( List::create( zzz->mDM.mDM ) );
-}
 
 #include "SATFData.cpp"
