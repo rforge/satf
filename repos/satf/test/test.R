@@ -6,12 +6,12 @@ source("./satf_load.R")
   fn.satf <- function(t) SATF(t, lambda=3, beta=1, delta=.4)
   sim.n <- 10^3
   time = seq(-.5,5,.5)
-  data <- generate.sat(criterion=fn.bias, dprime=fn.satf, time=time, n=sim.n, rho=.95)
+  data <- generate.sat(criterion=fn.bias, dprime=fn.satf, time=time, n=sim.n, rho=.3)
 
 (p1.raw <- satf(dv=c(response=~response), signal=~signal,
                 start     = c(lambda=3, beta=1, delta=.4),
                 contrasts = c(lambda=~1, beta=~1, delta=~1), 
-                constraints=list(corr.mrsat=.95), time=~time, 
+                constraints=list(), time=~time, 
                 bias=list(bias=~1, poly.degree=10), trial.id=~trial.id,
                 data=data, metric="logLikRaw"))
 

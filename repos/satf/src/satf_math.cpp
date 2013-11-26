@@ -1,24 +1,5 @@
-#ifndef __MATH_AUX_H__
-#define __MATH_AUX_H__
 
-#include <Rcpp.h>
-#include <assert.h>
-
-inline double logodds2p(double lodds) { return( exp(lodds)/(1+exp(lodds)) ); }
-inline double _dnorm(double x, double mu=0.0, double sigma=1.0, bool lg=false) { return ::Rf_dnorm4(x, mu, sigma, lg?1:0); }
-inline double _pnorm(double x, double mu=0.0, double sigma=1.0, bool lt=true, int lg=false) { return ::Rf_pnorm5(x, mu, sigma, lt?1:0, lg?1:0); }
-inline double _dgamma(double x, double shp, double scl, bool lg=false) { return ::Rf_dgamma(x, shp, scl, lg?1:0); }
-inline double _dbinom(double x, double n, double p, bool lg=false)     { return ::Rf_dbinom(x, n, p, lg?1:0); }
-
-inline double SATF(double t, double lambda, double beta, double delta) {
-  if(lambda == 0)
-    return 0.0;
-  else if(t <= delta)
-    return 0.0;
-  else 
-    return lambda*(1-exp(-(1/beta)*(t-delta)));
-}
-
+#include "satf_math.h"
 
 /* Approximation of the conditional bivariate normal cdf, based on Albers&Kallenberg (1994), 
    "A simple approximation to the bivariate normal distribution with large correlation coefficient".
@@ -118,5 +99,3 @@ double pnorm_conditional(double rho, double crit_minus_psi, double last_crit_min
     }
     return p_below;
 }
-
-#endif // __MATH_AUX_H__

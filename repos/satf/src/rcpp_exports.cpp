@@ -3,7 +3,7 @@
 using namespace Rcpp;
 #include <stdio.h>
 #include "SATFData.h"
-#include "math_aux.h"
+#include "satf_math.h"
 
 static CSATFData *zzz=NULL;
 
@@ -63,4 +63,7 @@ void rcpp_add_coefficient(DoubleVector& lower, DoubleVector& upper, CharacterVec
 }
 */
 
-#include "SATFData.cpp"
+#if 1
+#include "satf.cpp"
+#include "satf_math.cpp"
+#
