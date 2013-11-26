@@ -22,7 +22,7 @@ inline double SATF(double t, double lambda, double beta, double delta) {
 
 /* Approximation of the conditional bivariate normal cdf, based on Albers&Kallenberg (1994), 
    "A simple approximation to the bivariate normal distribution with large correlation coefficient".
-   Other approximations are cited in Albers&Kallenberg (1994):
+    Other approximations are cited in Albers & Kallenberg (1994):
     * Cox & Wermuth (1991), and
     * http://www.dtic.mil/dtic/tr/fulltext/u2/a125033.pdf (when correlation is low)
     * http://www.nasa.gov/centers/dryden/pdf/87929main_H-1120.pdf 
@@ -51,7 +51,6 @@ namespace AlbersKallenberg1994 {
   inline double h(double a, double b, double rho, double c, double c1, double theta) {
     return 0.5*pow(theta,2)*_pnorm(-c)*_ddnorm(a+theta*(c1-c))*(1+c*c1-pow(c1,2));
   }
-
 
   inline bool check_constraints(double a, double b, double rho) {
       assert( 0 < rho && rho < 1 );
