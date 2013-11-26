@@ -245,3 +245,27 @@ satf.group <- function(start, data, metric="logLik", multilevel=T, ...)
   hyperparams$'convergence.1e-8' <- convergence8
   list(params=subj.params, hyperparams=hyperparams)
 }
+
+
+
+remove.outliers <- function(x, factor) {
+  distance <- abs(mean(x)-x);
+  x <- x[order(distance, decreasing=T)];
+  distance <- sort(distance, decreasing=T);
+  exclude <- c()
+  for(i in 2:length(x)) {
+    if(distance[i-1]/distance[i] > factor) {
+      exclude <- c(exclude, i-1)
+    } else {
+      break;
+    }
+  }
+  if(length(exclude) > length(x)) {
+    stop("More than half the data were excluded as outliers.")
+  }
+  if(length(exclude)) {
+    print(paste("Excluding:", paste(x[exclude], collapse="")))
+    x <- x[(-1*exclude)]
+  }
+  x
+}
