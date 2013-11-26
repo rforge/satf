@@ -75,19 +75,12 @@ add.params <- function(formula, letter, startpars, start=0) {
   return(c())
 }
 
-
 formula.terms <- function(formula) { 
   terms.formula <- terms(formula)
   stopifnot(attr(terms.formula, "intercept")==1)
   attr(terms.formula, "term.labels")
 }
-n.terms <- function(formula) length(formula.terms(formula))
 
-formula.terms <- function(formula) { 
-  terms.formula <- terms(formula)
-  stopifnot(attr(terms.formula, "intercept")==1)
-  attr(terms.formula, "term.labels")
-}
 n.terms <- function(formula) length(formula.terms(formula))
 
 SATF <- function(t, lambda, beta, delta)

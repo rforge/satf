@@ -62,12 +62,15 @@ init.satf.params <- function(start, contrasts, constraints, trial.id) {
     }
   }
 
-  # make sure the bounds on 'corr.mrsat' are reasonable, i.e. within [0; 1]
+  # make sure the bounds on 'corr.mrsat' are reasonable, given the approximation to the multivariate normal CDF we use
+  # Albers and Kallenberg recommend [1/sqrt(2), 1] for their approximation
+  corr.mrsat.lower <- 1/sqrt(2)
+  corr.mrsat.upper <- 1
   if('corr.mrsat' %in% rownames(constraint.matrix)) {
-    if( constraint.matrix['corr.mrsat', 'lower'] < 0 )
-      constraint.matrix['corr.mrsat', 'lower'] <- 0
-    if( constraint.matrix['corr.mrsat', 'upper'] > 1 )
-      constraint.matrix['corr.mrsat', 'upper'] <- 1
+    if( constraint.matrix['corr.mrsat', 'lower'] < corr.mrsat.lower )
+      constraint.matrix['corr.mrsat', 'lower'] <- corr.mrsat.lower
+    if( constraint.matrix['corr.mrsat', 'upper'] > corr.mrsat.upper )
+      constraint.matrix['corr.mrsat', 'upper'] <- corr.mrsat.upper
     
     lower <- constraint.matrix['corr.mrsat', 'lower']
     upper <- constraint.matrix['corr.mrsat', 'upper']

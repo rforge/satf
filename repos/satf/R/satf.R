@@ -50,9 +50,9 @@ satf.criterion <- function(data, dv, bias, cnames) {
 }
 
                   
-satf  <- function(dv, signal, start, contrasts, data, time, metric, bias, 
-                  trial.id=NULL, constraints=list(), plot=FALSE, 
-                  optim.control=list(), optim.digits=1, plot=FALSE,  method="Nelder-Mead", ...)
+satf  <- function(dv, signal, start, contrasts, data, time, metric, bias, trial.id=NULL, 
+                  constraints=list(), optim.control=list(), optim.digits=1, plot=FALSE,  
+                  method="Nelder-Mead", ...)
 {
   metric.permissible <- c('RMSD','R2','adjR2','logLik','logLikRaw')
   reportifnot(metric %in% metric.permissible, sprintf("'metric' has to be one of: %s", paste(metric.permissible, collapse=", ")))
