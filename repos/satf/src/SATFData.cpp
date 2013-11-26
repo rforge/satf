@@ -322,87 +322,63 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(DoubleVector& coefs, bool by_ro
   _dbg((0, "rv_type: %d, datapoints: %d", mRV.GetRVType(), mDM.nDatapoints()));
   assert( mRV.GetRVType() == rv_binary);
 
-  double withinTrialCorrelation;
-  double last_dprime = 0;
+  double corr_mrsat, last_dprime = 0;
+  bool independent = true;
   
-  if( coefs.size() > (int) mDM.nCoefs() ) {
-    withinTrialCorrelation = coefs[ mDM.nCoefs() ];
-  }
-
   DoubleVector LL;
   if(!by_row)
     LL.push_back( 0 );
+  
+  // get mrsat-correlation parameter if there is one
+  if( coefs.size() > (int) mDM.nCoefs() ) {
+    corr_mrsat = coefs[ mDM.nCoefs() ];
+  }
 
+  // determine log-likelihood for each datapoint
   for(size_t idx = 0; idx < mDM.nDatapoints(); idx++)
   {
-/*    // TOOO: remove
-    if(idx >= 19872 && idx <= 19882)
-      _dbg_set_level(-10);
-    else
-      _dbg_set_level(0);
-    if(idx > 19882)
-      break;
-*/
-
     double dprime = mDM.ComputeDprime(coefs, idx, mTime[idx]);
-    _dbg((0, "\nidx <%d>, time <%.1f>, crit <%.2f>, dprime <%.2f>, resp. <%d>", 
+    _dbg((0, "idx <%d>, time <%.1f>, crit <%.2f>, dprime <%.2f>, resp. <%d>", 
       idx, mTime[idx], mRV.PredictedCriterion(idx), dprime, mRV.ResponseYes(idx)));
 
     if(isnan(dprime)) {
+      _dbg((-10, "WARNING: dprime is undefined."));
       LL[0] += R_NaN;
-      double lambda = mDM.GetParameter(CDesignMatrix::parameter_lambda, idx, coefs);
-      double beta = mDM.GetParameter(CDesignMatrix::parameter_beta, idx, coefs);
-      double delta = mDM.GetParameter(CDesignMatrix::parameter_delta, idx, coefs);
-      _dbg((-10, "WARNING: dprime is undefined. SATF parameters <%f, %f, %f>", lambda, beta, delta));
       break;
     }
 
-    bool dependent = false;
-    if(mRV.HasTrialId() && idx > 0 && withinTrialCorrelation != 0) {
-      dependent = mRV.TrialId(idx)==mRV.TrialId(idx-1);
+    if(mRV.HasTrialId() && idx > 0 && corr_mrsat != 0) {
+      independent = mRV.TrialId(idx)!=mRV.TrialId(idx-1);
+    } else {
+      independent = true;
     }
 
-
-    double cur_LL;
-    if(dependent)
+    double pNo, cur_LL;
+    if(independent)
+    {
+            pNo = _pnorm(mRV.PredictedCriterion(idx), dprime);
+            
+    } else 
     {
       double crit_minus_psi = mRV.PredictedCriterion(idx) - dprime;
       double last_crit_minus_psi = mRV.PredictedCriterion(idx-1) - last_dprime;
-      double p_No = pnorm_conditional(withinTrialCorrelation, crit_minus_psi, 
-                                       last_crit_minus_psi, mRV.ResponseYes(idx-1) == 1 );
+      pNo = pnorm_conditional(corr_mrsat, crit_minus_psi, last_crit_minus_psi, mRV.ResponseYes(idx-1) == 1 );
 
-      if(p_No < 0 || p_No > 1 || isnan(p_No)) {
-        _dbg((0, "WARNING: p_No = %f", p_No));
-        _dbg((0, "coefs <%f, %f, %f, %f>", coefs[0], coefs[1], coefs[2], coefs[3]));
+      if(pNo < 0 || pNo > 1 || isnan(pNo)) {
+        _dbg((0, "WARNING: p_No = %f", pNo));
+        LL[0] += R_NaN;
         break;
       }
-      _dbg((0, "dependent data, c-psi <%.2f-%.2f=%.2f>, last c-psi <%.2f>, p_no <%f>", 
-                   mRV.PredictedCriterion(idx), dprime, crit_minus_psi, last_crit_minus_psi, p_No));
-
-
-      if(mRV.ResponseYes(idx) == 1) cur_LL = log(1-p_No);
-      else                          cur_LL = log(p_No);
-        
-    } else 
-    {
-      _dbg((0, "*in*dependent data"));
-      int response = mRV.ResponseYes(idx);  
-      double pNo = _pnorm(mRV.PredictedCriterion(idx), dprime);
-      cur_LL = log( response - (2*response-1)*pNo );
-     _dbg((0, "t <%.1f>, dprime <%.2f>, crit <%.2f>, resp. <%d>, LL <%.2f>, pNo <%.2f>", 
-                  mTime[idx], dprime, mRV.PredictedCriterion(idx), mRV.ResponseYes(idx), cur_LL, pNo));
     }
-
     last_dprime = dprime;
+    
+    if(mRV.ResponseYes(idx) == 1) cur_LL = log(1-pNo);
+    else                          cur_LL = log(pNo);
 
-    if(by_row)
-      LL.push_back( cur_LL );
-    else
-      LL[0] += cur_LL;
+    if(by_row) LL.push_back( cur_LL );
+    else       LL[0] += cur_LL;
   }
-
-  _dbg((0, "coefs <%.2f, %.2f, %.2f>", coefs[0], coefs[1], coefs[2])); 
-
+  
   return LL;
 }
 
