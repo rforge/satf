@@ -78,7 +78,7 @@ namespace AlbersKallenberg1994 {
   }
 }
 
-inline double pnorm2d(double x_upper, double y_upper, double rho, double second_order=true) {
+double pnorm2d(double x_upper, double y_upper, double rho, double second_order) {
     return AlbersKallenberg1994::pnorm2d(x_upper, y_upper, rho, second_order);
 }
 

@@ -8,8 +8,8 @@ using namespace Rcpp;
 #include <time.h>
 #include <vector>
 
-#include "SATFData.h"
-#include "math_aux.h"
+#include "satf.h"
+#include "satf_math.h"
 
 
 #define MAX_CORRELATION .96

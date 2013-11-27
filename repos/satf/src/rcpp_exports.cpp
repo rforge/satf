@@ -2,7 +2,7 @@
 #include <Rcpp.h>
 using namespace Rcpp;
 #include <stdio.h>
-#include "SATFData.h"
+#include "satf.h"
 #include "satf_math.h"
 
 static CSATFData *zzz=NULL;
@@ -41,8 +41,8 @@ DoubleVector rcpp_unconstrain_coefs(DoubleVector& coefs) {
 }
 
 // [[Rcpp::export]]
-DoubleVector rcpp_pnorm2d(DoubleVector& x_lower, DoubleVector& y_lower, DoubleVector& rho, LogicalVector& order) {
-    return Rcpp::wrap(pnorm2d(x_lower[0], y_lower[0], rho[0], order[0]));
+double rcpp_pnorm2d(double x_lower, double y_lower, double rho, bool order) {
+    return pnorm2d(x_lower, y_lower, rho, order);
 }
 
 // [[Rcpp::export]]
@@ -63,7 +63,7 @@ void rcpp_add_coefficient(DoubleVector& lower, DoubleVector& upper, CharacterVec
 }
 */
 
-#if 1
-#include "satf.cpp"
-#include "satf_math.cpp"
-#
+#if 0
+  #include "satf.cpp"
+  #include "satf_math.cpp"
+#endif

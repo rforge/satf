@@ -5,6 +5,7 @@
 #include <assert.h>
 
 double pnorm_conditional(double rho, double crit_minus_psi, double last_crit_minus_psi, bool last_response_above_criterion);
+double pnorm2d(double x_upper, double y_upper, double rho, double second_order=true);
 
 inline double logodds2p(double lodds) { return( exp(lodds)/(1+exp(lodds)) ); }
 inline double _dnorm(double x, double mu=0.0, double sigma=1.0, bool lg=false) { return ::Rf_dnorm4(x, mu, sigma, lg?1:0); }

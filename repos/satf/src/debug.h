@@ -1,10 +1,6 @@
 #ifndef __SATF_DEBUG_H__
 #define __SATF_DEBUG_H__
 
-#include <stdio.h>
-#include <vector>
-#include <iostream>
-
 class DebugMethod {
   public:
       DebugMethod(const char* class_name, const char* fn_name, int dbg_level, int at_level);
@@ -22,43 +18,6 @@ class DebugMethod {
       
       static int mIndentationLevel;
 };
-
-int DebugMethod::mIndentationLevel = 0;
-
-inline DebugMethod::DebugMethod(const char* class_name, const char* fn_name, int dbg_level, int at_level) {
-    mDbgLevel = dbg_level;
-    mAtLevel = at_level;
-    mClassName = class_name;
-    mFunctionName = fn_name;
-    log(mAtLevel, fn_name);
-    mIndentationLevel++;
-}
-
-inline DebugMethod::~DebugMethod() {
-    mIndentationLevel--;
-    log(mAtLevel, "--");
-}
-
-void DebugMethod::set_level(int at_level){
-      mAtLevel = at_level;
-}
-
-inline void DebugMethod::log(int at_level, const char * format, ...) 
-{
-    if(at_level+mAtLevel > mDbgLevel)
-      return;
-      
-    for(int i=0; i < mIndentationLevel; i++)
-      putc('\t', stdout);
-    
-    char buffer[1000];
-    va_list args;
-    va_start (args, format);
-    vsprintf (buffer, format, args);
-    printf(" %s", buffer);
-    va_end (args);
-    printf(" (%s)\n", mClassName.c_str());
-}
 
 #ifdef DEBUG
   #define _dbg_class_init                   static const char* m_dbg_class; static const int m_dbg_level

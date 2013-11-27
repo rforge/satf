@@ -6,14 +6,19 @@
 using namespace Rcpp;
 
 // rcpp_initialize_logLikFn
-LogicalVector rcpp_initialize_logLikFn(List& params);
-RcppExport SEXP satf_rcpp_initialize_logLikFn(SEXP paramsSEXP) {
+LogicalVector rcpp_initialize_logLikFn(CharacterVector& dv, List& contrasts, NumericMatrix& coef_constraints, DataFrame& data, DoubleVector& predicted_criterion, CharacterVector& cnames);
+RcppExport SEXP satf_rcpp_initialize_logLikFn(SEXP dvSEXP, SEXP contrastsSEXP, SEXP coef_constraintsSEXP, SEXP dataSEXP, SEXP predicted_criterionSEXP, SEXP cnamesSEXP) {
 BEGIN_RCPP
     SEXP __sexp_result;
     {
         Rcpp::RNGScope __rngScope;
-        Rcpp::traits::input_parameter< List& >::type params(paramsSEXP );
-        LogicalVector __result = rcpp_initialize_logLikFn(params);
+        Rcpp::traits::input_parameter< CharacterVector& >::type dv(dvSEXP );
+        Rcpp::traits::input_parameter< List& >::type contrasts(contrastsSEXP );
+        Rcpp::traits::input_parameter< NumericMatrix& >::type coef_constraints(coef_constraintsSEXP );
+        Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP );
+        Rcpp::traits::input_parameter< DoubleVector& >::type predicted_criterion(predicted_criterionSEXP );
+        Rcpp::traits::input_parameter< CharacterVector& >::type cnames(cnamesSEXP );
+        LogicalVector __result = rcpp_initialize_logLikFn(dv, contrasts, coef_constraints, data, predicted_criterion, cnames);
         PROTECT(__sexp_result = Rcpp::wrap(__result));
     }
     UNPROTECT(1);
@@ -35,15 +40,62 @@ BEGIN_RCPP
 END_RCPP
 }
 // rcpp_compute_logLikFn
-DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs, DoubleVector& fixed_coefs);
-RcppExport SEXP satf_rcpp_compute_logLikFn(SEXP coefsSEXP, SEXP fixed_coefsSEXP) {
+DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs, bool by_row = false);
+RcppExport SEXP satf_rcpp_compute_logLikFn(SEXP coefsSEXP, SEXP by_rowSEXP) {
 BEGIN_RCPP
     SEXP __sexp_result;
     {
         Rcpp::RNGScope __rngScope;
         Rcpp::traits::input_parameter< DoubleVector& >::type coefs(coefsSEXP );
-        Rcpp::traits::input_parameter< DoubleVector& >::type fixed_coefs(fixed_coefsSEXP );
-        DoubleVector __result = rcpp_compute_logLikFn(coefs, fixed_coefs);
+        Rcpp::traits::input_parameter< bool >::type by_row(by_rowSEXP );
+        DoubleVector __result = rcpp_compute_logLikFn(coefs, by_row);
+        PROTECT(__sexp_result = Rcpp::wrap(__result));
+    }
+    UNPROTECT(1);
+    return __sexp_result;
+END_RCPP
+}
+// rcpp_constrain_coefs
+DoubleVector rcpp_constrain_coefs(DoubleVector& coefs);
+RcppExport SEXP satf_rcpp_constrain_coefs(SEXP coefsSEXP) {
+BEGIN_RCPP
+    SEXP __sexp_result;
+    {
+        Rcpp::RNGScope __rngScope;
+        Rcpp::traits::input_parameter< DoubleVector& >::type coefs(coefsSEXP );
+        DoubleVector __result = rcpp_constrain_coefs(coefs);
+        PROTECT(__sexp_result = Rcpp::wrap(__result));
+    }
+    UNPROTECT(1);
+    return __sexp_result;
+END_RCPP
+}
+// rcpp_unconstrain_coefs
+DoubleVector rcpp_unconstrain_coefs(DoubleVector& coefs);
+RcppExport SEXP satf_rcpp_unconstrain_coefs(SEXP coefsSEXP) {
+BEGIN_RCPP
+    SEXP __sexp_result;
+    {
+        Rcpp::RNGScope __rngScope;
+        Rcpp::traits::input_parameter< DoubleVector& >::type coefs(coefsSEXP );
+        DoubleVector __result = rcpp_unconstrain_coefs(coefs);
+        PROTECT(__sexp_result = Rcpp::wrap(__result));
+    }
+    UNPROTECT(1);
+    return __sexp_result;
+END_RCPP
+}
+// rcpp_correlate
+DoubleVector rcpp_correlate(IntegerVector& trial_id, DoubleVector& noise, DoubleVector& rho_vec);
+RcppExport SEXP satf_rcpp_correlate(SEXP trial_idSEXP, SEXP noiseSEXP, SEXP rho_vecSEXP) {
+BEGIN_RCPP
+    SEXP __sexp_result;
+    {
+        Rcpp::RNGScope __rngScope;
+        Rcpp::traits::input_parameter< IntegerVector& >::type trial_id(trial_idSEXP );
+        Rcpp::traits::input_parameter< DoubleVector& >::type noise(noiseSEXP );
+        Rcpp::traits::input_parameter< DoubleVector& >::type rho_vec(rho_vecSEXP );
+        DoubleVector __result = rcpp_correlate(trial_id, noise, rho_vec);
         PROTECT(__sexp_result = Rcpp::wrap(__result));
     }
     UNPROTECT(1);
