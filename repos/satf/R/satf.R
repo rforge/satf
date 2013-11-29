@@ -38,6 +38,7 @@ compute_satf_criterion <- function(data, dv, bias, cnames) {
         d$crit <- qnorm(1-n.yes/n)
         d
     })
+    predicted.crit <- data.crit[rownames(data), 'crit']
   }
   reportifnot(!any(is.na(predicted.crit)) && all(is.finite(predicted.crit)), "Invalid criterion predicted." )
   predicted.crit
