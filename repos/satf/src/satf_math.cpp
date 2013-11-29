@@ -62,6 +62,7 @@ namespace AlbersKallenberg1994 {
   inline double pnorm2d(double x_upper, double y_upper, double rho, bool second_order) {
       double theta, res;
       theta = AlbersKallenberg1994::f_theta(rho);
+      
       res = _pnorm2d(x_upper, y_upper, rho, theta, true, second_order);
       if(res >= 0) return res;
       
@@ -82,19 +83,14 @@ double pnorm2d(double x_upper, double y_upper, double rho, double second_order) 
     return AlbersKallenberg1994::pnorm2d(x_upper, y_upper, rho, second_order);
 }
 
-
 double pnorm_conditional(double rho, double crit_minus_psi, double last_crit_minus_psi, 
                                 bool last_response_above_criterion)
 {
     double p_below;
     if(last_response_above_criterion) {
-//        printf("1-<%f>/<%f> = %f\n", pnorm2d(-crit_minus_psi, -last_crit_minus_psi, rho), _pnorm(-last_crit_minus_psi),
-//                                 1-pnorm2d(-crit_minus_psi, -last_crit_minus_psi, rho)/_pnorm(-last_crit_minus_psi));
         p_below = 1-pnorm2d(-crit_minus_psi, -last_crit_minus_psi, rho)/_pnorm(-last_crit_minus_psi);
         
     } else {
-//        printf("<%f>/<%f> = %f\n", pnorm2d(crit_minus_psi, last_crit_minus_psi, rho), _pnorm(last_crit_minus_psi),
-//                                 pnorm2d(crit_minus_psi, last_crit_minus_psi, rho)/_pnorm(last_crit_minus_psi));
         p_below = pnorm2d(crit_minus_psi, last_crit_minus_psi, rho)/_pnorm(last_crit_minus_psi);
     }
     return p_below;

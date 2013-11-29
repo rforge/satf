@@ -1,7 +1,5 @@
 
-
 # TODO: Use as.quoted() for formulas.
-
 check.formula.for.colname <- function(data, name, formula, n.cols=1) {
   reportifnot( is.formula(formula), sprintf("Parameter '%s' needs to be a formula.", name) )
   colname <- formula.terms(formula)
@@ -41,11 +39,8 @@ default <- function(lst, name, val) {
   lst
 }
 
-optim.to.precision <- function(start, optim.digits, control, ...)
+optim.to.precision <- function(start, optim.digits, control, method="Nelder-Mead", ...)
 {
-  method = "Nelder-Mead"
-  if("method" %in% names(control))
-    method = control['method']
   run.optim <- function(start) optim(par=start, method=method, control=control, ...)
   res <- run.optim(start)
   if(method == "SANN")
@@ -83,6 +78,6 @@ formula.terms <- function(formula) {
 
 n.terms <- function(formula) length(formula.terms(formula))
 
-SATF <- function(t, lambda, beta, delta)
-  (t >= delta)*(lambda*(1-exp(-1/beta*(t-delta)))) 
+SATF <- function(t, asymptote, invrate, intercept)
+  (t >= intercept)*(asymptote*(1-exp(-1/invrate*(t-intercept)))) 
 

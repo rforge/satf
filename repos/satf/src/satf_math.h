@@ -13,13 +13,13 @@ inline double _pnorm(double x, double mu=0.0, double sigma=1.0, bool lt=true, in
 inline double _dgamma(double x, double shp, double scl, bool lg=false) { return ::Rf_dgamma(x, shp, scl, lg?1:0); }
 inline double _dbinom(double x, double n, double p, bool lg=false)     { return ::Rf_dbinom(x, n, p, lg?1:0); }
 
-inline double SATF(double t, double lambda, double beta, double delta) {
-  if(lambda == 0)
+inline double SATF(double t, double asymptote, double invrate, double intercept) {
+  if(asymptote == 0)
     return 0.0;
-  else if(t <= delta)
+  else if(t <= intercept)
     return 0.0;
   else 
-    return lambda*(1-exp(-(1/beta)*(t-delta)));
+    return asymptote*(1-exp(-(1/invrate)*(t-intercept)));
 }
 
 #endif // __MATH_AUX_H__

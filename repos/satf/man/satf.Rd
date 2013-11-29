@@ -9,8 +9,8 @@
         metric="logLikRaw")
 
 (p <- satf(signal=,
-           start     = c(lambda=2.1, beta=1, delta=.4),
-           contrasts = c(lambda=~1, beta=~1, delta=~1), 
+           start     = c(asymptote=2.1, invrate=1, intercept=.4),
+           contrasts = c(asymptote=~1, invrate=~1, intercept=~1), 
            constraints=list(), time=~time, 
            bias=list(bias=~1, poly.degree=10), # trial.id=~trial.id,
            data=data, metric="logLikRaw")) # "logLikRaw"

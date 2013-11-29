@@ -33,4 +33,11 @@ class DebugMethod {
   #define _dbg(param)                              
 #endif
 
+#ifdef PROFILING
+  #include <unistd.h>
+  #define _prof_init    int prof_start
+  #define _prof_start   prof_start = getMilliCount()
+  #define _prof_add(var)   var += getMilliSpan(prof_start)
+#endif
+
 #endif  //__SATF_DEBUG_H__

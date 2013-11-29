@@ -1,24 +1,48 @@
 
+add.params <- function(formula, letter, startpars, start=0) {
+  n <- n.terms(formula)
+  if(n > 0) {
+    names <- paste(letter, formula.terms(formula), sep='.')
+    vec <- ifelse(!is.na(startpars[names]), startpars[names], start)
+    names(vec) <- names
+    return(vec)
+  }
+  return(c())
+}
+
 init.satf.params <- function(start, contrasts, constraints, trial.id) {
 
   reportifnot(is.vector(start) && !is.list(start), "Parameter 'start' needs to be a vector.")
   reportifnot(!is.null(start) || !any(is.na(start)), "Parameter 'start' was not provided or containts NAs.")
 
-  start.original <- start
-  start.coreparams <- start[names(contrasts)]
-  reportifnot(!any(is.na(start.coreparams)), sprintf("Parameter 'start' needs to contain start values for: %s", 
-                                             paste(names(contrasts), collapse=", ") ))
-
-  # init all necessary satf parameters
-  newstart <- start.coreparams
-  for(name in names(contrasts))
-    newstart <- c(newstart, add.params(contrasts[[name]], name, start, NA))
-
+  # make sure start values were provided for the intercepts
+  start.intercepts <- start[names(contrasts)]
+  missing.intercepts <- paste(names(start.intercepts[is.na(start.intercepts)]), collapse=", ")
+  reportifnot( missing.intercepts == "", sprintf("Parameter 'start' does not contain start values for: %s", 
+                                                 missing.intercepts))
+  
+  
+  # order arguments as expected in the C++ code (1=asymptote, 2=rate, 3=intercept)
+  # NOTE/TODO: The reason this is hardcoded is that the start parameters are the design matrix are created in the
+  #            R code, and the coefficient order needs to be aligned properly with what the C++ code expects.
+  # TODO: Fix this problem by rewriting CCoefConstraints::Unconstrain() to use names for input (instead of indices), 
+  #       and to output the vector in the right order (i.e., in agreement with the names in the design matrix and in 
+  #       the constraint matrix).
+  contrasts <- contrasts[c('asymptote', 'invrate', 'intercept')]
+    
+  # rearange start parameters, make sure the coefficients for every parameter are contiguous
+  start.names <- c()
+  for(cur.name in names(contrasts)) {
+    start.names <- c(start.names, cur.name)
+    if(length(contrasts[[cur.name]]))
+      start.names <- c(start.names, paste(cur.name, contrasts[[cur.name]], sep='.'))  
+  }
+  start <- start[ start.names ]
+  names(start) <- start.names
+  
   # add a corr.mrsat parameter if necessary
   if(!is.null(trial.id))
-    newstart <- c(newstart, corr.mrsat=NA)
-  
-  start <- newstart
+    start <- c(start, corr.mrsat=NA)
 
   # set default constraints for intercepts
   for(name in names(contrasts))
@@ -93,8 +117,8 @@ init.satf.params <- function(start, contrasts, constraints, trial.id) {
     print(tmp)
     stop("Start parameters are not within limits.")
   }
-  
-  return(list(constraints=constraint.matrix, start=start));
+
+  return(list(constraints=constraint.matrix, start=start, contrasts=contrasts));
 }
 
 
@@ -106,10 +130,15 @@ translate.parameters  <- function(data, dv, start, contrasts, constraints,
                                   bias, signal, time, trial.id, summarize) {
   
   cnames <- list()
+  
+  # translate parameter: contrasts
+  for(name in names(contrasts)) 
+    contrasts[[name]] = check.formula.for.colname(data, paste('contrasts', name, sep='$'), contrasts[[name]], n.cols=NA)
 
+  # initialize start parameters and create constraint matrix  
   satf.params <- init.satf.params(start=start, contrasts=contrasts, constraints=constraints, trial.id=trial.id)
   
-  # TRANSLATE PARAMETER: dv
+  # translate parameter: dv
   if('response' %in% names(dv)) {
     dv[['response']] <- check.formula.for.colname(data, 'dv$response', dv$response)
     stopifnot.binary( data[, dv[['response']] ] )
@@ -123,16 +152,12 @@ translate.parameters  <- function(data, dv, start, contrasts, constraints,
     
   }
   dv <- unlist(dv)
-  
-  # TRANSLATE PARAMETER: contrasts
-  for(name in names(contrasts))
-    contrasts[[name]] = check.formula.for.colname(data, paste('contrasts', name, sep='$'), contrasts[[name]], n.cols=NA)
 
-  # TRANSLATE PARAMETER: bias
+  # translate parameter: bias
   reportifnot(all(c('bias', 'poly.degree') %in% names(bias)), "Parameter 'bias' needs to containt 'bias' and 'poly.degree'.")
   bias[['bias']] = check.formula.for.colname(data, 'bias$bias', bias[['bias']], n.cols=NA)
   
-  # CHECK COLUMN NAMES: signal, time, trial.id
+  # check column names: signal, time, trial.id
   cnames$signal <- check.formula.for.colname(data, 'signal', signal)
   stopifnot.binary( data[,cnames$signal] )
     
@@ -141,7 +166,7 @@ translate.parameters  <- function(data, dv, start, contrasts, constraints,
   if(!is.null(trial.id))
     cnames$trial.id <- check.formula.for.colname(data, 'trial.id', trial.id)
   
-  # RETURN
-  list(dv=dv, start=satf.params$start, contrasts=contrasts, bias=bias,
+  # return
+  list(dv=dv, start=satf.params$start, contrasts=satf.params$contrasts, bias=bias,
        constraints=satf.params$constraints, cnames=unlist(cnames) )
 }

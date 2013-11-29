@@ -6,23 +6,35 @@ using namespace Rcpp;
 #include <assert.h>
 #include <stdio.h>
 #include <time.h>
+#include <sys/timeb.h>
 #include <vector>
 
 #include "satf.h"
 #include "satf_math.h"
 
-
-#define MAX_CORRELATION .96
-
 #define GET(TYPE, NAME) Rcpp::clone( Rcpp::as<TYPE>(params[NAME]) )
 
-#define debug_level 0
+#define debug_level 10
 
-_dbg_class_set(CCoefConstraints, "CCoefConstraints", debug_level);
-_dbg_class_set(CResponseVariable, "CResponseVariable", debug_level);
-_dbg_class_set(CDesignMatrix, "CDesignMatrix", debug_level);
-_dbg_class_set(CSATFData, "CSATFData", debug_level);
+_dbg_class_set(CCoefConstraints, "CCoefConstraints", 0);
+_dbg_class_set(CResponseVariable, "CResponseVariable", 0);
+_dbg_class_set(CDesignMatrix, "CDesignMatrix",0);
+_dbg_class_set(CSATFData, "CSATFData", 0);
 
+
+int getMilliCount(){
+  timeb tb;
+	ftime(&tb);
+	int nCount = tb.millitm + (tb.time & 0xfffff) * 1000;
+	return nCount;
+}
+
+int getMilliSpan(int nTimeStart){
+	int nSpan = getMilliCount() - nTimeStart;
+	if(nSpan < 0)
+		nSpan += 0x100000 * 1000;
+	return nSpan;
+}
 
 
 /**********************************
@@ -112,14 +124,14 @@ CDesignMatrix::CDesignMatrix(List& contrasts, DataFrame& data,
 
 CDesignMatrix::Parameter CDesignMatrix::StringToParameter(std::string& name)
 {
-  if(name == "lambda") {
-    return parameter_lambda;
+  if(name == "asymptote") {
+    return parameter_asymptote;
 
-  } else if(name == "beta") {
-    return parameter_beta;
+  } else if(name == "invrate") {
+    return parameter_invrate;
 
-  } else if(name == "delta") {
-    return parameter_delta;
+  } else if(name == "intercept") {
+    return parameter_intercept;
 
   }
   return parameter_invalid;
@@ -146,13 +158,17 @@ double CDesignMatrix::GetParameter(Parameter parameter, int datapoint_index, Dou
 double CDesignMatrix::ComputeDprime(Rcpp::DoubleVector& coefs, int datapoint_index, double time) 
 {
   _dbg_function("ComputeDprime", 1);
-  double lambda = GetParameter(parameter_lambda, datapoint_index, coefs);
-  double beta   = GetParameter(parameter_beta,  datapoint_index, coefs);
-  double delta  = GetParameter(parameter_delta, datapoint_index, coefs);
-  _dbg((0, "time <%.2f>", time));
-  _dbg((0, "coef <%.2f, %.2f, %.2f>", coefs[0], coefs[1], coefs[2]));
-  _dbg((0, "lambda <%.2f>, beta <%.2f>, delta <%.2f>", lambda, beta, delta));
-  return SATF(time, lambda, beta, delta);
+  double asymptote = GetParameter(parameter_asymptote, datapoint_index, coefs);
+  double invrate   = GetParameter(parameter_invrate,  datapoint_index, coefs);
+  double intercept = GetParameter(parameter_intercept, datapoint_index, coefs);
+  _dbg((10, "time <%.2f>", time));
+  _dbg((10, "index first <%d, %d, %d>", mCoefIndexFirst[0], mCoefIndexFirst[1], mCoefIndexFirst[2] ));
+  _dbg((10, "index last  <%d, %d, %d>", mCoefIndexLast[0], mCoefIndexLast[1], mCoefIndexLast[2] ));
+  _dbg((10, "coef <%.2f, %.2f, %.2f, %.2f>", coefs[0], coefs[1], coefs[2], coefs[3]));
+  _dbg((10, "asymptote <%.2f>, invrate <%.2f>, intercept <%.2f>", asymptote, invrate, intercept));
+  _dbg((10, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t"));
+  _dbg((10, "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t"));
+  return SATF(time, asymptote, invrate, intercept);
 }
 
 
@@ -228,7 +244,7 @@ double CCoefConstraints::TransformCoef(double raw_coef, int i, bool constrain)
   }
 }
 
-DoubleVector CCoefConstraints::Constrain(Rcpp::DoubleVector& raw_coefs, bool use_names) {
+Rcpp::DoubleVector CCoefConstraints::Constrain(Rcpp::DoubleVector& raw_coefs, bool use_names) {
   _dbg_function("Constrain", 1);
 
   DoubleVector coefs;
@@ -250,6 +266,15 @@ DoubleVector CCoefConstraints::Constrain(Rcpp::DoubleVector& raw_coefs, bool use
     else
       coefs.push_back( val );  
   }
+/*  
+  for(int i=0; i < raw_coefs.size(); i++)
+    printf("%.3f, ", raw_coefs[i]);
+  printf(" / ");
+
+  for(int i=0; i < coefs.size(); i++)
+    printf("%.3f, ", coefs[i]);
+  printf("\n");
+*/  
   return coefs;
 }
 
@@ -322,18 +347,15 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(DoubleVector& coefs, bool by_ro
   _dbg((0, "rv_type: %d, datapoints: %d", mRV.GetRVType(), mDM.nDatapoints()));
   assert( mRV.GetRVType() == rv_binary);
 
-  double corr_mrsat, last_dprime = 0;
+  double LL, corr_mrsat, last_dprime = 0;
   bool independent = true;
-  
-  DoubleVector LL;
-  if(!by_row)
-    LL.push_back( 0 );
-  
+  DoubleVector LLVector;
+
   // get mrsat-correlation parameter if there is one
   if( coefs.size() > (int) mDM.nCoefs() ) {
     corr_mrsat = coefs[ mDM.nCoefs() ];
   }
-
+  
   // determine log-likelihood for each datapoint
   for(size_t idx = 0; idx < mDM.nDatapoints(); idx++)
   {
@@ -343,21 +365,24 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(DoubleVector& coefs, bool by_ro
 
     if(isnan(dprime)) {
       _dbg((-10, "WARNING: dprime is undefined."));
-      LL[0] += R_NaN;
-      break;
+      LLVector[0] += R_NaN;
+      return LLVector;
     }
 
-    if(mRV.HasTrialId() && idx > 0 && corr_mrsat != 0) {
-      independent = mRV.TrialId(idx)!=mRV.TrialId(idx-1);
+    if( mRV.HasTrialId() ) {
+      if(idx > 0 && corr_mrsat != 0) {
+        independent = mRV.TrialId(idx)!=mRV.TrialId(idx-1);
+      }
     } else {
       independent = true;
     }
 
-    double pNo, cur_LL;
+    double criterion, pNo, cur_LL;
     if(independent)
     {
-            pNo = _pnorm(mRV.PredictedCriterion(idx), dprime);
-            
+        criterion = mRV.PredictedCriterion(idx);
+        cur_LL = _pnorm(criterion, dprime, 1.0, (mRV.ResponseYes(idx) == 0), true);
+
     } else 
     {
       double crit_minus_psi = mRV.PredictedCriterion(idx) - dprime;
@@ -366,20 +391,24 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(DoubleVector& coefs, bool by_ro
 
       if(pNo < 0 || pNo > 1 || isnan(pNo)) {
         _dbg((0, "WARNING: p_No = %f", pNo));
-        LL[0] += R_NaN;
-        break;
+        LLVector[0] += R_NaN;
+        return LLVector;
       }
+      
+      if(mRV.ResponseYes(idx) == 1) cur_LL = log(1-pNo);
+      else                          cur_LL = log(pNo);
     }
     last_dprime = dprime;
-    
-    if(mRV.ResponseYes(idx) == 1) cur_LL = log(1-pNo);
-    else                          cur_LL = log(pNo);
 
-    if(by_row) LL.push_back( cur_LL );
-    else       LL[0] += cur_LL;
+    if(by_row) 
+        LLVector.push_back( cur_LL );
+    else
+      LL += cur_LL;
   }
-  
-  return LL;
+  if(!by_row)
+    LLVector.push_back( LL );
+
+  return LLVector;
 }
 
 DoubleVector CSATFData::ObjectiveFunction_Aggregate(Rcpp::DoubleVector& coefs, bool by_row)
@@ -388,22 +417,37 @@ DoubleVector CSATFData::ObjectiveFunction_Aggregate(Rcpp::DoubleVector& coefs, b
 
   assert( mRV.GetRVType() == rv_aggregate);
   
-  DoubleVector LL;
+  DoubleVector LLVector;
   if(!by_row)
-    LL.push_back( 0 );
+    LLVector.push_back( 0 );
+
+// ******
+//  mDM.ComputeDprime(coefs, 1, 5.0);
+//  mDM.ComputeDprime(coefs, 3, 5.0);
+//  return LLVector;  
+// ******
   
   for(size_t idx=0; idx < mDM.nDatapoints(); idx++)
   {
     double dprime = mDM.ComputeDprime(coefs, idx, mTime[idx]);
-    double pYes = 1-_pnorm(mRV.PredictedCriterion(idx), dprime);
-    double cur_LL = _dbinom(mRV.NResponsesYes(idx), mRV.NResponses(idx), pYes );
+    double criterion = mRV.PredictedCriterion(idx);
+    double pYes = 1-_pnorm(criterion, dprime);
+    _dbg((0, "idx <%d>, criterion <%.3f>, dprime <%.3f>, p_yes <%.3f>", idx, criterion, dprime, pYes));
+    
+    int n_responses_yes = mRV.NResponsesYes(idx);
+    int n_responses = mRV.NResponses(idx);
+    double cur_LL = _dbinom(n_responses_yes, n_responses, pYes, true );
+    _dbg((0, "\t\t dbinom(%d, %d, %f) = <%.3f> (LL)", mRV.NResponsesYes(idx), mRV.NResponses(idx), pYes, cur_LL));
+
+    //_dbg((0, "idx <%d>, dprime <%.3f>, p_yes <%.3f>, LL <%.3f>", idx, dprime, pYes, cur_LL));
     
     if(by_row)
-      LL.push_back( cur_LL );
+      LLVector.push_back( cur_LL );
     else
-      LL[0] += cur_LL;
+      LLVector[0] += cur_LL;
   }
-  return LL;
+  _dbg((0, "returning <%f>", LLVector[0]));
+  return LLVector;
 }
 
 Rcpp::DoubleVector CSATFData::ObjectiveFunction(DoubleVector& raw_coefs, bool by_row)
@@ -413,7 +457,7 @@ Rcpp::DoubleVector CSATFData::ObjectiveFunction(DoubleVector& raw_coefs, bool by
   assert(coefs.length() == mnCoefs || coefs.length() == mnCoefs+1 );
 
   // transform coefficients
-  DoubleVector coefs = ConstrainCoefs(raw_coefs);
+  DoubleVector coefs = ConstrainCoefs(raw_coefs, false);
 
   // init the log-likelihood vector with the log-likelihood of the parameters, given the hyperparameters (or 0 if there are none)
   DoubleVector LL(1);

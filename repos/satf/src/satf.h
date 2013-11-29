@@ -2,7 +2,7 @@
 #define __SATF_DATA_H__
 #include <Rcpp.h>
 
-//#define DEBUG
+#define DEBUG
 #include "debug.h"
 
 enum RVType {
@@ -56,9 +56,9 @@ class CDesignMatrix
 {
   public:
     typedef enum {
-      parameter_lambda = 0,
-      parameter_beta  = 1,
-      parameter_delta  = 2,
+      parameter_asymptote = 0,
+      parameter_invrate  = 1,
+      parameter_intercept  = 2,
       parameter_invalid = 3
     } Parameter;
     
@@ -89,13 +89,13 @@ class CDesignMatrix
 class CCoefConstraints {
   public:
     CCoefConstraints(Rcpp::NumericMatrix& coef_constraints);
+
+    Rcpp::DoubleVector Constrain(Rcpp::DoubleVector& coefs, bool use_names);
+    Rcpp::DoubleVector Unconstrain(Rcpp::DoubleVector& coefs);
     
     void AddCoefficient(double lower, double upper, std::string& name);
 
     double CoefsLL(Rcpp::DoubleVector& coefs);
-
-    Rcpp::DoubleVector Constrain(Rcpp::DoubleVector& coefs, bool use_names=false);
-    Rcpp::DoubleVector Unconstrain(Rcpp::DoubleVector& coefs);
     
   private:
     double TransformCoef(double raw_coefs, int i, bool constrain);
@@ -125,7 +125,7 @@ class CSATFData
     
     Rcpp::DoubleVector ObjectiveFunction(Rcpp::DoubleVector& coefs, bool by_row=false);
     
-    Rcpp::DoubleVector ConstrainCoefs(Rcpp::DoubleVector& coefs, bool use_names=false);
+    Rcpp::DoubleVector ConstrainCoefs(Rcpp::DoubleVector& coefs, bool use_names);
     Rcpp::DoubleVector UnconstrainCoefs(Rcpp::DoubleVector& coefs);
     
     void AddCoefficient(double lower, double upper, std::string& name);

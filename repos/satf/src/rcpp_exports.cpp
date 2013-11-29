@@ -27,7 +27,7 @@ LogicalVector rcpp_deinitialize_logLikFn() {
 
 // [[Rcpp::export]]
 DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs, bool by_row=false) {
-    return Rcpp::wrap(zzz->ObjectiveFunction(coefs, by_row) );
+  return Rcpp::wrap(zzz->ObjectiveFunction(coefs, by_row) );
 }
 
 // [[Rcpp::export]]
@@ -37,7 +37,7 @@ DoubleVector rcpp_constrain_coefs(DoubleVector& coefs) {
 
 // [[Rcpp::export]]
 DoubleVector rcpp_unconstrain_coefs(DoubleVector& coefs) {
-    return Rcpp::wrap(zzz->UnconstrainCoefs(coefs));
+  return Rcpp::wrap(zzz->UnconstrainCoefs(coefs));
 }
 
 // [[Rcpp::export]]
@@ -55,6 +55,12 @@ DoubleVector rcpp_correlate(IntegerVector& trial_id, DoubleVector& noise, Double
   return Rcpp::wrap(noise);
 }
 
+// [[Rcpp::export]]
+NumericMatrix rcpp_get_dm() {
+  return Rcpp::wrap(zzz->mDM.mDM);
+}
+
+
 /*
 // [[Rcpp::export]]
 void rcpp_add_coefficient(DoubleVector& lower, DoubleVector& upper, CharacterVector& name) {
@@ -63,7 +69,8 @@ void rcpp_add_coefficient(DoubleVector& lower, DoubleVector& upper, CharacterVec
 }
 */
 
-#if 0
+#if 1
   #include "satf.cpp"
   #include "satf_math.cpp"
+  #include "debug.cpp"
 #endif

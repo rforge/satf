@@ -1,9 +1,11 @@
 
-satf.summarize.n.yes <- function(data, ids, signal='signal',
-                                 time='time', dv='response') {
+satf_aggregate_nyes <- function(data, id, time.id=c(), signal='signal', 
+                                time='time', dv='response') 
+{
   stopifnot.binary( data[[ dv[1] ]] )
-  stopifnot(!(signal %in% ids))
-  data <- ddply(data, c(ids, signal), function(d) {
+  stopifnot(!(signal %in% id))
+  stopifnot(!(signal %in% time.id))
+  data <- ddply(data, c(id, signal), function(d) {
     d$n.responses.yes <- sum(d[[ dv[1] ]])
     d$n.responses <- length(d[[ dv[1] ]])
     for(colname in colnames(d)) {
@@ -14,21 +16,24 @@ satf.summarize.n.yes <- function(data, ids, signal='signal',
     d[1,]
   })
   data[[ dv[1] ]] <- NULL
-  ddply(data, c(ids), function(d) {
-    d[[ time ]] <- mean(d[[ time ]])
-    d
-  })
+  if(length(time.id) > 0 ) {
+    data <- ddply(data, time.id, function(d) {
+      d[[ time ]] <- mean(d[[ time ]])
+      d
+    })
+  }
+  data
 }
 
-satf.summarize.dprime <- function(data, ids, signal, dv=NULL) {
+satf_aggregate_dprime <- function(data, id, signal, dv=NULL) {
   if(is.null(dv))
     dv <- c('n.responses.yes', 'n.responses')
   
-  res <- ddply(data, ids, function(d) {
-    d.noise  <- d[d[[signal]] == 0, ]
-    d.signal <- d[d[[signal]] != 0, ]
-    reportifnot(nrow(d.signal) == 1, sprintf("ncol(d.signal)=%d", nrow(d.signal)))
-    reportifnot(nrow(d.noise) == 1, sprintf("ncol(d.noise)=%d", nrow(d.noise)))
+  res <- ddply(data, id, function(d) {
+    d.noise  <- d[ !as.logical(d[[signal]]), ]
+    d.signal <- d[ as.logical(d[[signal]]), ]
+    #reportifnot(nrow(d.signal) == 1, sprintf("ncol(d.signal)=%d", nrow(d.signal)))
+    reportifnot(nrow(d.noise) == 1, sprintf("ncol(d.noise) = %d", nrow(d.noise)))
     
     hits = d.signal[[ dv[1] ]]
     misses = d.signal[[ dv[2] ]] - hits
@@ -37,10 +42,8 @@ satf.summarize.dprime <- function(data, ids, signal, dv=NULL) {
     d.signal[[ dv[1] ]] <- NULL
     d.signal[[ dv[2] ]] <- NULL
     
-    d.signal$time <- (d.signal$time+d.noise$time)/2
-    
     summary <- ldply(1:nrow(d.signal), function(i) {
-      dprime.var(hits=hits[i], misses=misses[i], fas=fas, crs=crs)
+      compute_dprime(hits=hits[i], misses=misses[i], fas=fas, crs=crs)
     })
     cbind(d.signal, summary)
   })
@@ -49,7 +52,7 @@ satf.summarize.dprime <- function(data, ids, signal, dv=NULL) {
 
 
 
-dprime.var <- function(hits, fas, misses, crs, flat.min=.5)
+compute_dprime <- function(hits, fas, misses, crs, flat.min=.5)
 {
   # 'correct' possible probabilites of 1  
   n.signal <- hits+misses; n.noise <- fas+crs
