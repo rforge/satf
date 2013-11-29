@@ -41,7 +41,7 @@ init.satf.params <- function(start, contrasts, constraints, trial.id) {
   names(start) <- start.names
   
   # add a corr.mrsat parameter if necessary
-  if(!is.null(trial.id))
+  if( !is.null(trial.id) && !('corr.mrsat' %in% names(start)) )
     start <- c(start, corr.mrsat=NA)
 
   # set default constraints for intercepts
@@ -98,12 +98,10 @@ init.satf.params <- function(start, contrasts, constraints, trial.id) {
     
     lower <- constraint.matrix['corr.mrsat', 'lower']
     upper <- constraint.matrix['corr.mrsat', 'upper']
-    if('corr.mrsat' %in% names(start.original))
-      start[['corr.mrsat']] <- start.original[['corr.mrsat']]
-    else
+    if('corr.mrsat' %in% names(start) && is.na(start[['corr.mrsat']]) )
       start[['corr.mrsat']] <- (lower+(upper-lower)/2)
   }
-  
+
   start[is.na(start)] <- 0
   if(warn.about.start.params) {
     start.str <- paste0(names(start), '=', start,  collapse=", ")
