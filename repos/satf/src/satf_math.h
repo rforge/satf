@@ -22,4 +22,8 @@ inline double SATF(double t, double asymptote, double invrate, double intercept)
     return asymptote*(1-exp(-(1/invrate)*(t-intercept)));
 }
 
+inline double CriterionF(double t, double upper, double lower, double center, double stretch) {
+  return exp( (t-center)/stretch )/(1+exp( (t-center)/stretch ))*(upper-lower)+lower;
+}
+
 #endif // __MATH_AUX_H__

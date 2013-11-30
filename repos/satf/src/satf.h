@@ -2,7 +2,7 @@
 #define __SATF_DATA_H__
 #include <Rcpp.h>
 
-#define DEBUG
+//#define DEBUG
 #include "debug.h"
 
 enum RVType {
@@ -155,6 +155,9 @@ inline void CSATFData::AddCoefficient(double lower, double upper, std::string& n
   return mCoefConstraints.AddCoefficient(lower, upper, name);
 }
 
-void AddCoefficient(double lower, double upper, std::string& name);
+
+DoubleVector ObjectiveFunctionCriterion(DoubleVector& coefs, DoubleVector& time, 
+                                        IntegerVector& response, IntegerVector& trial_id);
+DoubleVector ComputeCriterion(DoubleVector& coefs, DoubleVector& time);
 
 #endif // __SATF_DATA_H__

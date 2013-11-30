@@ -360,12 +360,17 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(DoubleVector& coefs, bool by_ro
   for(size_t idx = 0; idx < mDM.nDatapoints(); idx++)
   {
     double dprime = mDM.ComputeDprime(coefs, idx, mTime[idx]);
+    
     _dbg((0, "idx <%d>, time <%.1f>, crit <%.2f>, dprime <%.2f>, resp. <%d>", 
       idx, mTime[idx], mRV.PredictedCriterion(idx), dprime, mRV.ResponseYes(idx)));
 
     if(isnan(dprime)) {
       _dbg((-10, "WARNING: dprime is undefined."));
-      LLVector[0] += R_NaN;
+      printf("SATF WARNING: dprime is undefined.\n");
+      if(by_row) 
+          LLVector.push_back( R_NaN );
+      else
+          LLVector[0] += R_NaN;
       return LLVector;
     }
 
@@ -389,9 +394,16 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(DoubleVector& coefs, bool by_ro
       double last_crit_minus_psi = mRV.PredictedCriterion(idx-1) - last_dprime;
       pNo = pnorm_conditional(corr_mrsat, crit_minus_psi, last_crit_minus_psi, mRV.ResponseYes(idx-1) == 1 );
 
+      _dbg((0, "corr.mrsat <%.3f>, crit_minus_psi <%.3f>, last_crit_minus_psi <%.3f>", 
+                corr_mrsat, crit_minus_psi, last_crit_minus_psi));
+
       if(pNo < 0 || pNo > 1 || isnan(pNo)) {
-        _dbg((0, "WARNING: p_No = %f", pNo));
-        LLVector[0] += R_NaN;
+        _dbg((-10, "WARNING: p_No = %f", pNo));
+        printf("SATF WARNING, approximation returned invalid probability: p_No = %f\n", pNo);
+        if(by_row)
+            LLVector.push_back( R_NaN );
+        else
+            LLVector[0] += R_NaN;
         return LLVector;
       }
       
@@ -485,4 +497,51 @@ Rcpp::DoubleVector CSATFData::ObjectiveFunction(DoubleVector& raw_coefs, bool by
         break;
   }
   return(LL);
+}
+
+DoubleVector ObjectiveFunctionCriterion(DoubleVector& coefs, DoubleVector& time, 
+                                        IntegerVector& response, IntegerVector& trial_id) 
+{
+  assert(coefs.size() == 4);
+  
+  DoubleVector LLVector;
+  double upper, lower, center, stretch;
+  double LL = 0;
+  
+  if(time.size() != response.size()) {
+    LLVector.push_back(R_NaN);
+    return LLVector;
+  }
+  
+  upper = as< double >(coefs["upper"]);
+  lower = as< double >(coefs["lower"]);
+  center = as< double >(coefs["center"]);
+  stretch = as< double >(coefs["stretch"]);
+
+  for(int i=0; i < response.size(); i++) {
+    double criterion = CriterionF(time[i], upper, lower, center, stretch);
+    LL += _pnorm(criterion, 0.0, 1.0, response[i]==0, true);
+  }
+  
+  LLVector.push_back( LL );
+  return LLVector;
+}
+
+
+DoubleVector ComputeCriterion(DoubleVector& coefs, DoubleVector& time)
+{
+  assert(coefs.size() == 4);
+  
+  DoubleVector criterion;
+  double upper, lower, center, stretch;
+  
+  upper = as< double >(coefs["upper"]);
+  lower = as< double >(coefs["lower"]);
+  center = as< double >(coefs["center"]);
+  stretch = as< double >(coefs["stretch"]);
+
+  for(int i=0; i < time.size(); i++) {
+    criterion.push_back( CriterionF(time[i], upper, lower, center, stretch) );
+  }
+  return criterion;
 }

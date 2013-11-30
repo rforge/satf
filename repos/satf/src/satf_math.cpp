@@ -93,5 +93,8 @@ double pnorm_conditional(double rho, double crit_minus_psi, double last_crit_min
     } else {
         p_below = pnorm2d(crit_minus_psi, last_crit_minus_psi, rho)/_pnorm(last_crit_minus_psi);
     }
+    
+    // TODO:tolerate small errors, of the magnitude of -0.000012
+    
     return p_below;
 }

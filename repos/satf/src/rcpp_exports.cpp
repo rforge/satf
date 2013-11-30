@@ -20,8 +20,8 @@ LogicalVector rcpp_initialize_logLikFn(CharacterVector& dv,
 
 // [[Rcpp::export]]
 LogicalVector rcpp_deinitialize_logLikFn() {
-	delete zzz;
-	zzz = NULL;
+  	delete zzz;
+  	zzz = NULL;
     return Rcpp::wrap(true);
 }
 
@@ -41,8 +41,19 @@ DoubleVector rcpp_unconstrain_coefs(DoubleVector& coefs) {
 }
 
 // [[Rcpp::export]]
-double rcpp_pnorm2d(double x_lower, double y_lower, double rho, bool order) {
-    return pnorm2d(x_lower, y_lower, rho, order);
+DoubleVector rcpp_compute_criterion_logLikFn(DoubleVector& coefs, DoubleVector& time, 
+                                             IntegerVector& response, IntegerVector& trial_id) {
+  return Rcpp::wrap(ObjectiveFunctionCriterion(coefs, time, response, trial_id));
+}
+
+// [[Rcpp::export]]
+DoubleVector rcpp_compute_criterion(DoubleVector& coefs, DoubleVector& time) {
+  return Rcpp::wrap(ComputeCriterion(coefs, time));
+}
+
+// [[Rcpp::export]]
+double rcpp_pnorm2d(double x_lower, double y_lower, double rho, bool second_order) {
+    return pnorm2d(x_lower, y_lower, rho, second_order);
 }
 
 // [[Rcpp::export]]
