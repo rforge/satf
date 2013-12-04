@@ -84,7 +84,7 @@ double pnorm2d(double x_upper, double y_upper, double rho, double second_order) 
 }
 
 double pnorm_conditional(double rho, double crit_minus_psi, double last_crit_minus_psi, 
-                                bool last_response_above_criterion)
+                         bool last_response_above_criterion, bool tolerate_imprecisions)
 {
     double p_below;
     if(last_response_above_criterion) {
@@ -93,8 +93,15 @@ double pnorm_conditional(double rho, double crit_minus_psi, double last_crit_min
     } else {
         p_below = pnorm2d(crit_minus_psi, last_crit_minus_psi, rho)/_pnorm(last_crit_minus_psi);
     }
-    
-    // TODO:tolerate small errors, of the magnitude of -0.000012
-    
+
+    if(tolerate_imprecisions) {
+        static const double max_error = 0.0005;
+        static const double default_prob = 0.0001;
+        if(p_below < 0 && p_below > -max_error) {
+          p_below = default_prob;
+        } else if(p_below > 1 && p_below < 1+max_error) {
+          p_below = 1-default_prob;
+        }
+    }    
     return p_below;
 }

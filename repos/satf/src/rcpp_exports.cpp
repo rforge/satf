@@ -8,13 +8,11 @@ using namespace Rcpp;
 static CSATFData *zzz=NULL;
 
 // [[Rcpp::export]]
-LogicalVector rcpp_initialize_logLikFn(CharacterVector& dv,
-					List& contrasts, 
-					NumericMatrix& coef_constraints, DataFrame& data, 
-					DoubleVector& predicted_criterion, 
-					CharacterVector& cnames) {	
-    zzz = new CSATFData(dv, contrasts, coef_constraints, data, 
-					              predicted_criterion, cnames);
+LogicalVector rcpp_initialize_logLikFn(CharacterVector& dv, NumericMatrix& dm,
+          IntegerVector& dm_ncoef, NumericMatrix& constraints, DataFrame& data, 
+					CharacterVector& cnames)
+{	
+    zzz = new CSATFData(dv, dm, dm_ncoef, constraints, data, cnames);
     return Rcpp::wrap(true);
 }
 
@@ -26,8 +24,8 @@ LogicalVector rcpp_deinitialize_logLikFn() {
 }
 
 // [[Rcpp::export]]
-DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs, bool by_row=false) {
-  return Rcpp::wrap(zzz->ObjectiveFunction(coefs, by_row) );
+DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs, bool by_row=false, bool tolerate_imprecision=true) {
+  return Rcpp::wrap(zzz->ObjectiveFunction(coefs, by_row, tolerate_imprecision) );
 }
 
 // [[Rcpp::export]]
@@ -41,15 +39,25 @@ DoubleVector rcpp_unconstrain_coefs(DoubleVector& coefs) {
 }
 
 // [[Rcpp::export]]
-DoubleVector rcpp_compute_criterion_logLikFn(DoubleVector& coefs, DoubleVector& time, 
-                                             IntegerVector& response, IntegerVector& trial_id) {
-  return Rcpp::wrap(ObjectiveFunctionCriterion(coefs, time, response, trial_id));
+void rcpp_select_subset(LogicalVector& selection) {
+  zzz->SelectSubset(selection);
 }
 
 // [[Rcpp::export]]
-DoubleVector rcpp_compute_criterion(DoubleVector& coefs, DoubleVector& time) {
-  return Rcpp::wrap(ComputeCriterion(coefs, time));
+void rcpp_reset_selection( ) {
+  zzz->ResetSubset();
 }
+
+// [[Rcpp::export]]
+void rcpp_set_coef_values(DoubleVector& values) {
+  zzz->SetCoefValues(values);
+}
+
+// [[Rcpp::export]]
+void rcpp_reset_coef_values( CharacterVector& names ) {
+    zzz->ResetCoefValues(names);
+}
+
 
 // [[Rcpp::export]]
 double rcpp_pnorm2d(double x_lower, double y_lower, double rho, bool second_order) {
@@ -78,9 +86,22 @@ void rcpp_add_coefficient(DoubleVector& lower, DoubleVector& upper, CharacterVec
   std::string name_str = as<std::string>(name[0]);
   zzz->AddCoefficient((double)lower[0], (double)upper[0], name_str );
 }
+
+// [[Rcpp::export]]
+DoubleVector rcpp_compute_criterion_logLikFn(DoubleVector& coefs, DoubleVector& time, 
+                                             IntegerVector& response, IntegerVector& trial_id) {
+  return Rcpp::wrap(ObjectiveFunctionCriterion(coefs, time, response, trial_id));
+}
+
+// [[Rcpp::export]]
+DoubleVector rcpp_compute_criterion(DoubleVector& coefs, DoubleVector& time) {
+  return Rcpp::wrap(ComputeCriterion(coefs, time));
+}
 */
 
-#if 1
+
+
+#if 0
   #include "satf.cpp"
   #include "satf_math.cpp"
   #include "debug.cpp"

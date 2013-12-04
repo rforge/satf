@@ -10,7 +10,9 @@ satf_aggregate_nyes <- function(data, id, time.id=c(), signal='signal',
     d$n.responses <- length(d[[ dv[1] ]])
     for(colname in colnames(d)) {
       if(length(unique(d[[colname]])) > 1) {
-        d[[colname]] <- mean(d[[colname]])
+        newcolname <- paste('mean', colname, sep='.')
+        d[[ newcolname ]] <- mean( d[[colname]] )
+        d[[colname]] <- NULL
       }
     }
     d[1,]
