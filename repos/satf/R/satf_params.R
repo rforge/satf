@@ -17,8 +17,9 @@ init_designmatrix <- function(data, contrasts, bias, cnames, coreparams.satf, co
   if( !is.list(bias) ) {
     bias.contrast <- bias
     bias <- list()
-    bias[coreparams.bias] <- bias.contrast
-    
+    for(coreparam.bias in coreparams.bias)
+      bias[[coreparam.bias]] = bias.contrast
+
   } else if( !all(coreparams.bias %in% names(bias)) ) {
     stop("Parameter 'bias' needs to contain formulae for 'bias.min', 'bias.max', 'bias.invrate', and 'bias.intercept', or to be a formula.")
     
@@ -55,6 +56,11 @@ init_designmatrix <- function(data, contrasts, bias, cnames, coreparams.satf, co
   # create a column consisting of only 1's, for use with the bias
   data$'1' <- 1
   
+  missing.columns = dm.colnames[!(dm.colnames %in% colnames(data))]
+  if(length(missing.columns) > 0) {
+    stop(sprintf("Missing columns <%s>", paste0(missing.columns, sep=",", collapse=",")))
+  }
+  
   # create the design matrix
   dm <- data[,dm.colnames]
   colnames(dm) <- coef.names
@@ -81,7 +87,7 @@ init_coefs_and_constraints <- function(coefnames, start, constraints, coreparams
 {
   reportifnot(is.vector(start) && !is.list(start), "Parameter 'start' needs to be a vector.")
   reportifnot(!is.null(start) || !any(is.na(start)), "Parameter 'start' was not provided or containts NAs.")
-  
+
   # make sure start values were provided for all the necessary parameters
   missing.coreparams = coreparams[!(coreparams %in% names(start))]
   missing.coreparams.str = paste(missing.coreparams, collapse=", ")
@@ -97,66 +103,124 @@ init_coefs_and_constraints <- function(coefnames, start, constraints, coreparams
 
   start = start[coefnames]
   names(start) = coefnames
+
+  # construct the constraint matrix with a reversed the constraint list to make user-specified constraints take precedence over defaults
+  # (the reason there can be several specifications for one parameter is that constraints names are specified by regex expressions)
+  constraint.matrix = init_constraint_matrix(coefnames, rev(constraints))
   
-  # initialize constraints matrix
-  constraint.matrix = matrix(c(-Inf, Inf), nrow=length(start), ncol=2, byrow=TRUE, 
-                             dimnames=list(coefnames, c('lower', 'upper')))
-  
-  # define functions for finding coefficient constraints in the constraint list
-  is.match <- function(expr, name) regexpr(paste0('^',expr,'$'), text=name) > 0
-  find.match <- function(name) {
-    for(expr in names(constraints)) {
-      if(is.match(expr, name)) {
-        return(constraints[[expr]])
+  new_start_value <- function(constraint, oldvalue=NA) 
+  {
+    correction.fraction = .1
+    # find the value closest to the old value within the boundaries (or to 0 is the old value was NA)
+    if( is.na(oldvalue) && constraint[1] < 0 && constraint[2] > 0)
+      return(0);
+
+    if( all(is.infinite(constraint)) ) {
+      newvalue = 0
+
+    } else if( is.infinite(constraint[1]) ) {
+      newvalue = constraint[2]-correction.fraction
+
+    }  else if( is.infinite(constraint[2]) ) {
+      newvalue = constraint[1]+correction.fraction
+
+    } else if( constraint[1]==constraint[2] ) {
+      newvalue = constraint[1]
+
+    } else {
+      if( abs(constraint[1]-oldvalue) > abs(constraint[2]-oldvalue) ) {
+        newvalue = constraint[2]-correction.fraction
+      } else {
+        newvalue = constraint[1]+correction.fraction
       }
     }
-    return(NULL)
+    newvalue
   }
-  
-  # reverse the constraint list to make user-specified constraints take precedence over defaults
-  # (the reason there can be several specifications for one parameter is that constraints names are
-  #  specified by regex expressions)
-  constraints = rev(constraints)
 
   # fill the constraints matrix
-  warn.about.start.params <- FALSE
-  for(name in names(start))
+  start.changed = rep(FALSE, length(start))
+  names(start.changed) = names(start)
+  for(coefname in coefnames)
   {
-    val <- find.match(name)
-    if( is.null(val) )
-      next
-    
-    # set value
-    constraint.matrix[name,] <- val
-    
-    # if the constaint specifies a fixed value, change corresponding start parameter    
-    if( length(val) != 1 )
-      next
-    if( is.na(start[[name]]) ) {
-      start[[name]] <- val
-      
-    } else if(start[[name]] != val) 
+    cur.start = start[[coefname]]
+    cur.constraint = constraint.matrix[coefname,]
+    if( is.na(cur.start) ) {
+      start[[coefname]] = new_start_value(cur.constraint)
+
+    } else if( cur.start < cur.constraint[['lower']] || cur.start > cur.constraint[['upper']] ) 
     {
-      start[[name]] <- val
-      warn.about.start.params <- TRUE
+      start[[coefname]] = new_start_value(cur.constraint, cur.start)
+      start.changed[[coefname]] = TRUE
     }
   }
-  
-  start[is.na(start)] <- 0
-  if(warn.about.start.params) {
-    start.str <- paste0(names(start), '=', start,  collapse=", ")
-    warning(sprintf("Start values changed to <%s>.", start.str))
-  }
-  
-  # check whether start parameters are within the limits specified by the constraints
-  tmp <- cbind(start, constraint.matrix)
-  allwithinlimits <- all( tmp[,'start'] >= tmp[,'lower'] & tmp[,'start'] <= tmp[,'upper'] )
-  if( !allwithinlimits ) {
-    print(tmp)
-    stop("Start parameters are not within limits.")
-  }
 
-  return(list(constraints=constraint.matrix, start=start));
+  if( any( start.changed )) {
+    start.changed = names(start.changed[start.changed])
+    start.changed = paste0(start.changed, '=', start[start.changed],  collapse=", ")
+    warning(sprintf("Start values changed to <%s>.", start.changed))
+  }
+  
+  fixed.coefs <- constraint.matrix[,'upper'] == constraint.matrix[,'lower']
+  names(fixed.coefs) <- coefnames
+  
+  return(list(constraints=constraint.matrix, start=start, fixed.coefs=fixed.coefs));
+}
+
+
+  
+init_constraint_matrix <- function(coefnames, constraints) 
+{
+    # define functions for finding coefficient constraints in the constraint list
+    is_match <- function(expr, name) regexpr(paste0('^',expr,'$'), text=name) > 0
+    find_coefnames <- function(expr, coefnames) {
+      res = c()
+      for(coefname in coefnames) {
+        if(is_match(expr, coefname)) {
+          res = c(res, coefname)
+        }
+      }
+      return(res)
+    }
+
+    add_constraint <- function(cmatrix, coefname, constraint)
+    {
+      # use the most specific constraints specified as long as they are coherent,
+      # if they are incoherent, use the ones first in the reversed list
+
+      # set to fixed value if constraint is fixed
+      if(length(constraint) == 1) {
+        cmatrix[coefname,] = constraint
+
+      # or set boundaries, unless they are already set to a fixed value
+      } else if(cmatrix[coefname, 'lower'] != cmatrix[coefname, 'upper']) 
+      {
+        # increase lower boundary
+        if( constraint[1] > cmatrix[coefname, 'lower'] )
+          cmatrix[coefname, 'lower'] = constraint[1]
+
+        # decrease upper boundary
+        if( constraint[2] < cmatrix[coefname, 'upper'] )
+          cmatrix[coefname, 'upper'] = constraint[2]
+
+        reportifnot(cmatrix[coefname, 'lower'] <= cmatrix[coefname, 'upper'],
+          sprintf("Upper boundary for parameter %s is below lower boundary (%f; %f).", 
+                  coefname, cmatrix[coefname, 'lower'], cmatrix[coefname, 'upper']))
+      }
+      cmatrix
+    }
+
+    # initialize constraints matrix
+    constraint.matrix = matrix(c(-Inf, Inf), nrow=length(coefnames), ncol=2, byrow=TRUE, 
+                               dimnames=list(coefnames, c('lower', 'upper')))
+
+    for(expr in names(constraints))
+    {
+      constraint = constraints[[expr]]
+      for(coefname in find_coefnames(expr, coefnames)) {
+        constraint.matrix = add_constraint(constraint.matrix, coefname, constraint)
+      }
+    }
+    constraint.matrix
 }
 
 
@@ -176,6 +240,10 @@ translate.parameters  <- function(data, dv, contrasts, bias, signal, time, trial
   if(is.list(bias)) {
     for(name in names(bias)) 
       bias[[name]] = check.formula.for.colname(data, paste('bias', name, sep='$'), bias[[name]], n.cols=NA)
+
+  } else {
+      bias = check.formula.for.colname(data, 'bias', bias, n.cols=NA)
+
   }
   
   # TODO: Make sure that trials are not discontinuous.
@@ -218,9 +286,11 @@ set_start_defaults <- function(start, set.corr.mrsat=FALSE) {
 }
 
 set_constraints_defaults <- function(constraints) {
-  constraints = default(constraints, 'asymptote', c(0,Inf))
+  constraints = default(constraints, 'asymptote', c(0,5))
+  constraints = default(constraints, 'asymptote.*', c(-5,5))
   constraints = default(constraints, 'invrate', c(0,Inf))
   constraints = default(constraints, 'intercept', c(0,Inf))
+  constraints = default(constraints, 'bias.invrate', c(0,Inf))
   # Albers and Kallenberg recommend [1/sqrt(2), 1] for their approximation
   constraints = default(constraints, 'corr.mrsat', c(1/sqrt(2), 1))
   constraints

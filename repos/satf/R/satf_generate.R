@@ -8,27 +8,49 @@ process.arg <- function(arg, time) {
   arg
 }
 
-satf_generate_condition <- function(criterion, dprime, time, trial.ids, label, rho=0)
+
+satf_generate_condition <- function(dprime, criterion, time, n.per.time, label, rho=0)
 {
+  if(rho==0)
+    trial.ids = 1:(n.per.time*length(time))
+  
+  else
+    trial.ids = rep(1:n.per.time, each=length(time))
+
   intervals <- 1:length(time)
-  criterion <- process.arg(criterion, time)
-  dprime <- process.arg(dprime, time)
   data <-   data.frame( condition=label, interval=intervals, time=time, 
-                        trial.id=rep(trial.ids, each=length(time)), 
-                        dprime=dprime, criterion=criterion )
-  data$noise <- rnorm( nrow(data) )
-  data$noise = rcpp_correlate(data$trial.id, data$noise, rho)
-  data$dprime.cur <- data$dprime + data$noise
-  data$response <- data$dprime.cur > data$criterion
-  data
+                        trial.id=trial.ids, dprime=dprime, criterion=criterion )
+  data$cur.epsilon <- rnorm( nrow(data) )
+  if(rho != 0)
+    data$cur.epsilon = rcpp_correlate(data$trial.id, data$cur.epsilon, rho)
+  data$cur.psi <- data$dprime + data$cur.epsilon
+  data$response <- data$cur.psi > data$criterion
+  data[,c('condition', 'interval', 'time', 'trial.id', 'response')]
 }
 
-satf_generate <- function(criterion, dprime, time, n, rho=0, label="condition1") {
+# 'criterion' is what Wickens calls 'lambda', and 'bias' is what he calls 'lambda_center'
+
+satf_generate <- function(dprime, criterion=NULL, bias=NULL, time, n.per.time, rho=0, label="condition1") 
+{
+  if(is.null(criterion) && is.null(bias) )
+    stop("bias or criterion have to be provided.")
+  
+  else if(is.null(criterion) && is.null(bias) )
+    stop("Only one of bias and criterion may be provided.")
+  
+  dprime <- process.arg(dprime, time)
+  if(!is.null(criterion)) {
+    criterion <- process.arg(criterion, time)
+  } else  {
+    bias = process.arg(bias, time)
+    criterion = bias + dprime/2
+  }
   data0 <- satf_generate_condition(criterion=criterion, dprime=0, time=time, 
-                                  trial.ids=1:n, label=label, rho=rho)
+                                   n.per.time=n.per.time, label=label, rho=rho)
   data0$signal <- 0
   data1 <- satf_generate_condition(criterion=criterion, dprime=dprime,  time=time, 
-                                  trial.ids=1:n+n, label=label, rho=rho)
+                                   n.per.time=n.per.time, label=label, rho=rho)
   data1$signal <- 1
+  data1$trial.id = data1$trial.id + max(data0$trial.id)
   rbind(data0, data1)
 }

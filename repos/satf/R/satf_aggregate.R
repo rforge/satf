@@ -18,9 +18,13 @@ satf_aggregate_nyes <- function(data, id, time.id=c(), signal='signal',
     d[1,]
   })
   data[[ dv[1] ]] <- NULL
+  mean.time <- paste('mean', time, sep='.')
   if(length(time.id) > 0 ) {
     data <- ddply(data, time.id, function(d) {
-      d[[ time ]] <- mean(d[[ time ]])
+      if(time %in% colnames(d))
+        d[[ time ]] <- mean(d[[ time ]])
+      else
+        d[[ mean.time ]] <- mean(d[[ mean.time ]])
       d
     })
   }

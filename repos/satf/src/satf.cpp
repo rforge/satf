@@ -171,6 +171,8 @@ double CDesignMatrix::ComputeCriterion(Rcpp::DoubleVector& coefs, int datapoint_
   double max = GetParameter(parameter_bias_max, coefs, datapoint_index);
   double invrate = GetParameter(parameter_bias_invrate, coefs, datapoint_index);
   double intercept = GetParameter(parameter_bias_intercept, coefs, datapoint_index);
+  if(log)
+    printf("criterion(%f, %f, %f, %f) = %f\n", min, max, invrate, intercept, (SATF(time, max-min, invrate, intercept) + min) );
   return SATF(time, max-min, invrate, intercept) + min;
 }
 
@@ -240,14 +242,17 @@ double CCoefConstraints::TransformCoef(double raw_coef, int i, bool constrain)
 {
   _dbg_function("TransformCoef", 1);
 
-  if(mCoefsLower[i] == R_NegInf && mCoefsUpper[i] == R_PosInf) {
-    return raw_coef;     
-  } 
-  else if(mCoefsUpper[i] == R_PosInf ) {
+  if( IsCoefFixed(i) ) {
+    return raw_coef;
+
+  } else if(mCoefsLower[i] == R_NegInf && mCoefsUpper[i] == R_PosInf) {
+    return raw_coef; 
+
+  } else if(mCoefsUpper[i] == R_PosInf ) {
     return TransformWithOneBoundary(raw_coef, mCoefsLower[i], constrain);
 
   } else if( mCoefsLower[i] == R_NegInf) {
-    return -1*TransformWithOneBoundary(raw_coef, -mCoefsUpper[i], constrain);
+    return -1*TransformWithOneBoundary(-raw_coef, -mCoefsUpper[i], constrain);
     
   } else {
     return TransformWithTwoBoundaries(raw_coef, mCoefsLower[i], mCoefsUpper[i], constrain);
@@ -258,18 +263,11 @@ Rcpp::DoubleVector CCoefConstraints::Constrain(Rcpp::DoubleVector& raw_coefs, bo
   _dbg_function("Constrain", 1);
 
   DoubleVector coefs;
-  int n_fixed = 0;
   double val;
 
   for(int i=0; i < mCoefsLower.size(); i++)
   {
-    if( IsCoefFixed(i) ) {
-      val = mCoefsLower[i];
-      n_fixed++;
-    } 
-    else {
-      val = TransformCoef(raw_coefs[i-n_fixed], i, true);
-    }
+    val = TransformCoef(raw_coefs[i], i, true);
 
     if(use_names)
       coefs.push_back( val, mCoefNames[i] );  
@@ -287,10 +285,8 @@ DoubleVector CCoefConstraints::Unconstrain(Rcpp::DoubleVector& raw_coefs)
   double val;
 
   for(int i=0; i < raw_coefs.size(); i++) {
-    if( !IsCoefFixed(i) ) {
       val = TransformCoef(raw_coefs[i], i, false);
       coefs.push_back( val );
-    }
   }
   return coefs;
 }
@@ -423,7 +419,7 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(DoubleVector& coefs, bool by_ro
   _dbg_function("ObjectiveFunction_Binary", -1);
   assert( mDV.GetRVType() == rv_binary);
   _dbg((0, "rv_type: %d, datapoints: %d", mDV.GetRVType(), mDM.nDatapoints()));
-  
+
   DoubleVector LLVector;
   double corr_mrsat = 0;
   double last_dprime = 0, last_criterion = 0;
@@ -442,14 +438,22 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(DoubleVector& coefs, bool by_ro
     double dprime = mDM.ComputeDprime(coefs, idx, mTime[idx]);
     double criterion = mDM.ComputeCriterion(coefs, idx, mTime[idx]);
 
-    if( !valid_dprime(dprime, LLVector, by_row) )
+    if( !valid_dprime(dprime, LLVector, by_row) ) {
+      printf("criterion %f\n", mDM.ComputeCriterion(coefs, idx, mTime[idx], true) );
+      printf("dprime %f\n", mDM.ComputeDprime(coefs, idx, mTime[idx], true) );
       return LLVector;
+    }
     
     _dbg((0, "idx <%d>, time <%.2f>, crit <%.2f>, dprime <%.2f>, resp. <%d>", idx, mTime[idx], criterion, dprime, response ));
     
     // get mrsat-correlation parameter if there is one
     if( mDM.HasParameter( CDesignMatrix::parameter_corr_mrsat ) ) {
       corr_mrsat = mDM.GetParameter(CDesignMatrix::parameter_corr_mrsat, coefs, idx);
+      if( isnan(dprime) ) {
+          printf("SATF WARNING: corr_mrsat is NaN.\n");
+          save_LL(LLVector, R_NaN, by_row);
+          return false;
+      }
     }
 
     double pNo, cur_LL;
@@ -488,6 +492,7 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(DoubleVector& coefs, bool by_ro
 DoubleVector CSATFData::ObjectiveFunction_Aggregate(Rcpp::DoubleVector& coefs, bool by_row)
 {
   _dbg_function("ObjectiveFunction_Aggregate", -1);
+//printf("coef 2 <%f>\n", coefs[1]);
 
   assert( mDV.GetRVType() == rv_aggregate);
 

@@ -2,7 +2,7 @@
 #define __SATF_DATA_H__
 #include <Rcpp.h>
 
-//#define DEBUG
+#define DEBUG
 #include "debug.h"
 
 enum RVType {
@@ -122,7 +122,8 @@ class CCoefConstraints
     double TransformWithOneBoundary(double x, double lower, bool constrain);
     double TransformWithTwoBoundaries(double x, double lower, double upper, bool constrain);
     
-  private:
+  public:
+  //private:
       Rcpp::DoubleVector mCoefsLower;
       Rcpp::DoubleVector mCoefsUpper;
       std::vector<std::string> mCoefNames;

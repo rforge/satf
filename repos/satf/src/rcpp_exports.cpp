@@ -79,29 +79,17 @@ NumericMatrix rcpp_get_dm() {
   return Rcpp::wrap(zzz->mDM.mDM);
 }
 
-
-/*
 // [[Rcpp::export]]
-void rcpp_add_coefficient(DoubleVector& lower, DoubleVector& upper, CharacterVector& name) {
-  std::string name_str = as<std::string>(name[0]);
-  zzz->AddCoefficient((double)lower[0], (double)upper[0], name_str );
+NumericVector rcpp_get_constraints_lower() {
+  return Rcpp::wrap(zzz->mCoefConstraints.mCoefsLower);
+}
+// [[Rcpp::export]]
+NumericVector rcpp_get_constraints_upper() {
+  return Rcpp::wrap(zzz->mCoefConstraints.mCoefsUpper);
 }
 
-// [[Rcpp::export]]
-DoubleVector rcpp_compute_criterion_logLikFn(DoubleVector& coefs, DoubleVector& time, 
-                                             IntegerVector& response, IntegerVector& trial_id) {
-  return Rcpp::wrap(ObjectiveFunctionCriterion(coefs, time, response, trial_id));
-}
 
-// [[Rcpp::export]]
-DoubleVector rcpp_compute_criterion(DoubleVector& coefs, DoubleVector& time) {
-  return Rcpp::wrap(ComputeCriterion(coefs, time));
-}
-*/
-
-
-
-#if 0
+#if 1
   #include "satf.cpp"
   #include "satf_math.cpp"
   #include "debug.cpp"

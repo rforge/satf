@@ -1,6 +1,7 @@
 
 library(plyr)
 library(Rcpp)
+library(maxLik)
 source("~/CodeSATF/R/satf_misc.R")
 source("~/CodeSATF/R/satf_aggregate.R")
 source("~/CodeSATF/R/satf_params.R")
