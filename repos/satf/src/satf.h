@@ -2,7 +2,7 @@
 #define __SATF_DATA_H__
 #include <Rcpp.h>
 
-#define DEBUG
+//#define DEBUG
 #include "debug.h"
 
 enum RVType {
@@ -70,6 +70,8 @@ class CDesignMatrix
     inline size_t nCoefs() { return mDM.ncol(); }
     inline size_t nDatapoints() {return mDM.nrow(); }
     
+    void DetermineZeroRows(LogicalVector& columns_zero, std::vector<bool>& row_selected, bool all);
+    
     double ComputeDprime(Rcpp::DoubleVector& coefs, int datapoint_index, double time, bool log=false);
     double ComputeCriterion(Rcpp::DoubleVector& coefs, int datapoint_index, double time, bool log=false);
 
@@ -78,10 +80,14 @@ class CDesignMatrix
 
     Parameter StringToParameter(std::string& name);
 
+  private:
+    int FindColumnIndex(std::string& column_name);
+
 //  private:
     public:
     Rcpp::NumericMatrix mDM;
-    
+
+    std::vector<std::string> mCoefNames;
     std::vector<int> mCoefIndexFirst;
     std::vector<int> mCoefIndexLast;
     
@@ -112,7 +118,7 @@ class CCoefConstraints
     double CoefsLL(Rcpp::DoubleVector& coefs);
 
     bool IsCoefFixed(int coef_index);
-    int FindCoefIndex(std::string& name);
+    int  FindCoefIndex(std::string& name);
     
   private:
     bool SetCoefValue(std::string name, double value);
@@ -154,12 +160,11 @@ class CSATFData
     Rcpp::DoubleVector ConstrainCoefs(Rcpp::DoubleVector& coefs, bool use_names);
     Rcpp::DoubleVector UnconstrainCoefs(Rcpp::DoubleVector& coefs);
 
-    void SelectSubset(LogicalVector& selection);
+    void SelectSubset(LogicalVector& zero_columns, bool all);
     void ResetSubset();
 
     void SetCoefValues(DoubleVector& values);
     void ResetCoefValues(CharacterVector& names);
-
 
   private:
     Rcpp::DoubleVector ObjectiveFunction_Binary(Rcpp::DoubleVector& coefs, bool by_row=false, bool tolerate_imprecisions=false);
@@ -167,12 +172,12 @@ class CSATFData
 
 //  private:
   public:
-        CDesignMatrix mDM;
-        CDependentVariable mDV;
-        CCoefConstraints mCoefConstraints;
-        
-        std::vector<double> mTime;
-        std::vector<bool> mDisabled;
+    CDesignMatrix mDM;
+    CDependentVariable mDV;
+    CCoefConstraints mCoefConstraints;
+    
+    std::vector<double> mTime;
+    std::vector<bool> mEnabled;
     
     _dbg_class_init;
 };

@@ -10,17 +10,17 @@ add.params <- function(formula, letter, startpars, start=0) {
   return(c())
 }
 
-init_designmatrix <- function(data, contrasts, bias, cnames, coreparams.satf, coreparams.bias) {
+init_designmatrix <- function(data, contrasts, bias, cnames, satf.coefnames.core, bias.coefnames.core) {
 
-  reportifnot(all(coreparams.satf %in% names(contrasts)), 
+  reportifnot(all(satf.coefnames.core %in% names(contrasts)), 
                   "Parameter 'contrasts' needs to contain 'asymptote', 'invrate', and 'intercept'.")
   if( !is.list(bias) ) {
     bias.contrast <- bias
     bias <- list()
-    for(coreparam.bias in coreparams.bias)
+    for(coreparam.bias in bias.coefnames.core)
       bias[[coreparam.bias]] = bias.contrast
 
-  } else if( !all(coreparams.bias %in% names(bias)) ) {
+  } else if( !all(bias.coefnames.core %in% names(bias)) ) {
     stop("Parameter 'bias' needs to contain formulae for 'bias.min', 'bias.max', 'bias.invrate', and 'bias.intercept', or to be a formula.")
     
   }
@@ -66,7 +66,7 @@ init_designmatrix <- function(data, contrasts, bias, cnames, coreparams.satf, co
   colnames(dm) <- coef.names
   
   # set all satf coefficients to 0 for noise trials
-  satf.ncol <- sum(dm.coef.cnt[coreparams.satf])
+  satf.ncol <- sum(dm.coef.cnt[satf.coefnames.core])
   dm[,1:satf.ncol] <- dm[,1:satf.ncol]*data[, cnames['signal'] ]
   
   # add a corr.mrsat parameter if necessary
@@ -160,8 +160,7 @@ init_coefs_and_constraints <- function(coefnames, start, constraints, coreparams
     warning(sprintf("Start values changed to <%s>.", start.changed))
   }
   
-  fixed.coefs <- constraint.matrix[,'upper'] == constraint.matrix[,'lower']
-  names(fixed.coefs) <- coefnames
+  fixed.coefs <- coefnames[constraint.matrix[,'upper'] == constraint.matrix[,'lower']]
   
   return(list(constraints=constraint.matrix, start=start, fixed.coefs=fixed.coefs));
 }

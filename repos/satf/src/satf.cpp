@@ -92,6 +92,20 @@ CDesignMatrix::CDesignMatrix(Rcpp::NumericMatrix& dm, Rcpp::IntegerVector& dm_nc
     mCoefIndexLast[parameter] = mCoefIndexFirst[parameter] + dm_ncoef[i] - 1;
     cur_coef_index += dm_ncoef[i];
   }
+  
+  List dimnames(dm.attr("dimnames"));
+  if(dimnames.size() > 1) 
+  {
+    RObject names = dimnames[1];
+    if (!names.isNULL()) {
+      CharacterVector coef_names = CharacterVector(names);
+      _dbg((0, "copying <%d> names", coef_names.size() ));
+      for(int i=0; i < coef_names.size(); i++) {
+        mCoefNames.push_back( as< std::string >(coef_names[i]) );
+      }
+    }
+  }
+
 }
 
 // void CDesignMatrix::StringToParameter(std::string& name) {  
@@ -124,7 +138,6 @@ CDesignMatrix::Parameter CDesignMatrix::StringToParameter(std::string& name)
   } else if(name == "corr.mrsat") {
     return parameter_corr_mrsat;
   }
-  
   return parameter_invalid;
 }
 
@@ -175,6 +188,49 @@ double CDesignMatrix::ComputeCriterion(Rcpp::DoubleVector& coefs, int datapoint_
     printf("criterion(%f, %f, %f, %f) = %f\n", min, max, invrate, intercept, (SATF(time, max-min, invrate, intercept) + min) );
   return SATF(time, max-min, invrate, intercept) + min;
 }
+
+int CDesignMatrix::FindColumnIndex(std::string& column_name) {
+    for(size_t i=0; i < mCoefNames.size(); i++){
+        if(mCoefNames[i] == column_name)
+          return (int)i;
+    }
+    return -1;
+}
+
+void CDesignMatrix::DetermineZeroRows(LogicalVector& zero_columns, std::vector<bool>& row_selected, bool all)
+{
+    for(int i=0; i < row_selected.size(); i++) {
+      if(all)
+        row_selected[i] = true;
+      else
+        row_selected[i] = false;
+    }
+  
+    CharacterVector column_names = zero_columns.names();
+    for(int i=0; i < zero_columns.size(); i++) 
+    {
+      std::string column_name = as<std::string>(column_names[i]);
+      bool zero_column = zero_columns[i];
+      int col_idx = FindColumnIndex(column_name);
+      
+      for(int row_idx=0; row_idx < mDM.nrow(); row_idx++) 
+      {
+        double cur_value = mDM(row_idx, col_idx);
+        if(all) {
+            if(zero_column)
+              row_selected[row_idx] = row_selected[row_idx] & (cur_value == 0.0);
+            else
+              row_selected[row_idx] = row_selected[row_idx] & (cur_value != 0.0);
+        } else {
+            if(zero_column)
+              row_selected[row_idx] = row_selected[row_idx] | (cur_value == 0.0);
+            else
+              row_selected[row_idx] = row_selected[row_idx] | (cur_value != 0.0);
+        }
+      }  
+    }
+}
+    
 
 
 
@@ -372,11 +428,11 @@ CSATFData::CSATFData(Rcpp::CharacterVector& dv, Rcpp::NumericMatrix& dm,
                 mDM(dm, dm_ncoef), mDV(dv, cnames, data), 
                 mCoefConstraints(constraints)
 {
-  _dbg_function("constructor", 1);
+    _dbg_function("constructor", 1);
 
     std::string name_time = as< std::string >(cnames["time"]);
     mTime = as< std::vector<double> >(data[name_time]);
-    mDisabled = std::vector<bool>(mTime.size(), false);
+    mEnabled = std::vector<bool>(mTime.size(), true);
 }
 
 CSATFData::~CSATFData() {
@@ -431,7 +487,7 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(DoubleVector& coefs, bool by_ro
   // determine log-likelihood for each datapoint
   for(size_t idx = 0; idx < mDM.nDatapoints(); idx++)
   {
-    if(mDisabled[idx])
+    if(!mEnabled[idx])
       continue;
 
     int response = mDV.ResponseYes(idx);
@@ -502,7 +558,7 @@ DoubleVector CSATFData::ObjectiveFunction_Aggregate(Rcpp::DoubleVector& coefs, b
 
   for(size_t idx=0; idx < mDM.nDatapoints(); idx++)
   {
-    if(mDisabled[idx])
+    if(!mEnabled[idx])
       continue;
 
     double dprime = mDM.ComputeDprime(coefs, idx, mTime[idx]);
@@ -559,13 +615,12 @@ Rcpp::DoubleVector CSATFData::ObjectiveFunction(DoubleVector& raw_coefs, bool by
 }
 
 
-void CSATFData::SelectSubset(LogicalVector& selection) {
-  for(size_t i=0; i < mDisabled.size(); i++) {
-    mDisabled[i] = !selection[i];
-  }
+void CSATFData::SelectSubset(LogicalVector& columns_zero, bool all) {
+    mDM.DetermineZeroRows(columns_zero, mEnabled, all);
 }
+
 void CSATFData::ResetSubset(){
-  for(size_t i=0; i < mDisabled.size(); i++) {
-    mDisabled[i] = false;
+  for(size_t i=0; i < mEnabled.size(); i++) {
+    mEnabled[i] = true;
   }
 }

@@ -21,8 +21,8 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   # Check 'data' parameter
   reportifnot(nrow(data) > 0, "Parameter 'data' needs to consist of several rows.")
   
-  coreparams.satf <- c('asymptote', 'invrate', 'intercept')
-  coreparams.bias <- c('bias.min', 'bias.max', 'bias.invrate', 'bias.intercept')
+  satf.coefnames.core <- c('asymptote', 'invrate', 'intercept')
+  bias.coefnames.core <- c('bias.min', 'bias.max', 'bias.invrate', 'bias.intercept')
   
   # init default parameters for optimization
   optim.control$fnscale <- -1
@@ -38,11 +38,11 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   
   # initialize start parameters and create constraint matrix  
   dm <- init_designmatrix(data=data, contrasts=params$contrasts, bias=params$bias, cnames=params$cnames,
-                          coreparams.satf=coreparams.satf, coreparams.bias=coreparams.bias)
+                          satf.coefnames.core=satf.coefnames.core, bias.coefnames.core=bias.coefnames.core)
   
   # initialize start parameters and create constraint matrix  
   coefs <- init_coefs_and_constraints(coefnames=colnames(dm$dm), start=start, constraints=constraints,
-                                      coreparams=c(coreparams.satf, coreparams.bias))
+                                      coreparams=c(satf.coefnames.core, bias.coefnames.core))
   
   # initialize the C++ optimization routine
   rcpp_initialize_logLikFn(params$dv, dm$dm, dm$dm.coef.cnt, coefs$constraints, 
@@ -51,7 +51,7 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   start <- rcpp_unconstrain_coefs( coefs$start )
   names(start) <- names( coefs$start )
   
-  if(all(coefs$fixed.coefs)) {
+  if(all(names(start) %in% coefs$fixed.coefs)) {
     if(likelihood.byrow) {
       res <- rcpp_compute_logLikFn(start, TRUE, TRUE)
       rcpp_deinitialize_logLikFn()
@@ -75,28 +75,69 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
     stop("Got Inf or -Inf on first iteration. Adjust start parameters.")
   }
   
-  # optimization consists of several steps
-  fixed.coefs <- coefs$fixed.coefs
-  dprime.coefs <- names(start) %in% dm$contrasts.coefs
-  bias.coefs <- names(start) %in% dm$bias.coefs
-  
-  # STEP 1: optimize over criterion parameters (with correlation, if specified) use only noise trials
-  # fix satf parameters
-  signal <- data [[ params$cnames['signal'] ]]
-  rcpp_select_subset( !signal )
-  res <- maxLik(logLik=rcpp_compute_logLikFn, start=start, fixed=(fixed.coefs | dprime.coefs), method="Nelder-Mead", iterlim=10^6)
-  rcpp_reset_selection()
-  start <- coef(res)
-  
-  # STEP 2: optimize over d' parameters (with correlation, if specified)
-  rcpp_select_subset( signal )
-  res <- maxLik(logLik=rcpp_compute_logLikFn, start=start, fixed=(fixed.coefs | !dprime.coefs), method="Nelder-Mead", iterlim=10^6)
-  rcpp_reset_selection()
-  start <- coef(res)
-  
-  # STEP 3: optimize over all parameters
-  res <- maxLik(logLik=rcpp_compute_logLikFn, start=start, fixed=(fixed.coefs), method="Nelder-Mead", iterlim=10^6)
+  create_selection <- function(value, coefnames){
+    selection <- rep(F, length(coefnames))
+    names(selection) <- coefnames
+    selection
+  }
 
+  optimize_subset <- function(selection, variable, start) {
+    if(length(selection) > 0) {
+      rcpp_select_subset_by_zero_dm_columns_all( selection )
+    }
+    variable.coefnames = setdiff(variable, coefs$fixed.coefs)
+    fixed.coefnames = setdiff(names(start), variable.coefnames)
+    fixed = names(start) %in% fixed.coefnames
+    res = maxLik(logLik=rcpp_compute_logLikFn, start=start, fixed=fixed, method="Nelder-Mead", iterlim=10^6)
+    rcpp_reset_selection()
+    res
+  }
+  
+  satf.coefnames.all = dm$contrasts.coefs
+  bias.coefnames.all = dm$bias.coefs
+  satf.coefnames.noncore = setdiff(satf.coefnames.all, satf.coefnames.core)
+  bias.coefnames.noncore = setdiff(bias.coefnames.all, bias.coefnames.core)
+  
+  # optimization consists of several steps
+print(sprintf("step A1: %s", date()))  
+  # STEP A1: optimize over core criterion parameters, use only noise trials
+  selection = create_selection(TRUE, union(satf.coefnames.all, bias.coefnames.noncore))
+  res = optimize_subset(selection=selection, variable=bias.coefnames.core, start=start) 
+print(coef(res))
+  
+print(sprintf("step A2: %s", date()))  
+  # STEP A2: optimize over non-core criterion parameters, still using only noise trials
+  selection = c(create_selection(TRUE, satf.coefnames.all), create_selection(FALSE, bias.coefnames.noncore))
+  res = optimize_subset(selection=selection, variable=bias.coefnames.noncore, start=coef(res)) 
+print(coef(res))
+  
+print(sprintf("step A3: %s", date()))  
+  # STEP A3: optimize over all criterion parameters, still using only noise trials
+  selection = create_selection(TRUE, satf.coefnames.all)
+  res = optimize_subset(selection=selection, variable=bias.coefnames.all, start=coef(res)) 
+print(coef(res))
+stop()
+      
+print(sprintf("step A3: %s", date()))  
+  # STEP A3: optimize over non-core criterion parameters, still using only noise trials
+  res = optimize_subset(selection=selection, variable=dm$bias.coefs, start=coef(res)) 
+print(summary(res))
+  
+  
+  satf.coefnames.core <- c('asymptote', 'invrate', 'intercept')
+  bias.coefnames.core <- c('bias.min', 'bias.max', 'bias.invrate', 'bias.intercept')
+  
+print(sprintf("step 2: %s", date()))  
+  # STEP 2: optimize over d' parameters (with correlation, if specified)
+  selection = create_selection(FALSE, satf.coefnames.core)
+  res = optimize_subset(selection=selection, variable=c(dm$bias.coefs, 'corr.mrsat'), start=coef(res))
+print(summary(res))
+  
+print(sprintf("step 3: %s", date()))  
+  # STEP 3: optimize over all parameters
+  res <- maxLik(logLik=rcpp_compute_logLikFn, start=coef(res), fixed=(fixed.coefs), method="Nelder-Mead", iterlim=10^6)
+print(sprintf("/step 3: %s", date()))  
+  
   if(likelihood.byrow) {
     logLik <- rcpp_compute_logLikFn(coef(res), TRUE, TRUE)
     rcpp_deinitialize_logLikFn()

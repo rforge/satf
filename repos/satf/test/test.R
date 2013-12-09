@@ -15,23 +15,36 @@ source("~/CodeSATF/test/satf_load.R")
   data.dprime <- satf_aggregate_dprime(data.nyes, id=c('condition', 'interval'), signal='signal', 
                                        dv=c('n.responses.yes', 'n.responses'))
 
-with(data, plot(time, criterion))
-with(data.dprime, plot(time, c + dprime/2))
+  # data.nyes <- data.nyes[with(data.nyes, order(condition,signal, interval)),]
+  data$c1 <- ifelse(data$condition=="condition1", 1, 0)
+  data$c2 <- ifelse(data$condition=="condition2", 1, 0)
 
-  data.nyes <- data.nyes[with(data.nyes, order(condition,signal, interval)),]
-  data.nyes$c1 <- ifelse(data.nyes$condition=="condition1", 1, 0)
-  data.nyes$c2 <- ifelse(data.nyes$condition=="condition2", 1, 0)
+  with(data, plot(time, criterion))
+  with(data.dprime, plot(time, c + dprime/2))
 
 
-data.nyes
+
+source("~/CodeSATF/test/satf_load.R")
+
+date()
+(p1.raw <- satf(dv=c(response=~response), signal=~signal,
+                start     = c(asymptote=2, invrate=1, intercept=.4,
+                              bias.min=-1, bias.max=1, bias.intercept=0, bias.invrate=1),
+                contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+                bias = c(bias.min=~1, bias.max=~1, bias.intercept=~1, bias.invrate=~1), 
+                constraints=list(), time=~time, trial.id=~trial.id,
+                data=data, metric="logLik"))
+date()
+
 
 source("./satf_load.R")
 
 (p1.nyes1 <- satf(dv=c(n.responses.yes=~n.responses.yes, n.responses=~n.responses), signal=~signal,
                 start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
                 contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
-                bias = c(bias.min=~1, bias.max=~1, bias.intercept=~1, bias.invrate=~1), 
-                constraints=list(), time=~time, data=data.nyes, metric="logLik"))
+                bias = ~1, constraints=list(), time=~time, data=data.nyes, metric="logLik"))
+
+
 
 (p1.nyes2 <- satf(dv=c(n.responses.yes=~n.responses.yes, n.responses=~n.responses), signal=~signal,
                   start     = c(asymptote=2, invrate=1, intercept=.4),

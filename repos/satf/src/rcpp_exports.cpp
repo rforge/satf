@@ -39,14 +39,25 @@ DoubleVector rcpp_unconstrain_coefs(DoubleVector& coefs) {
 }
 
 // [[Rcpp::export]]
-void rcpp_select_subset(LogicalVector& selection) {
-  zzz->SelectSubset(selection);
+void rcpp_select_subset_by_zero_dm_columns_any(LogicalVector& zero_column) {
+  zzz->SelectSubset(zero_column, false);
+}
+
+// [[Rcpp::export]]
+void rcpp_select_subset_by_zero_dm_columns_all(LogicalVector& zero_column) {
+  zzz->SelectSubset(zero_column, true);
 }
 
 // [[Rcpp::export]]
 void rcpp_reset_selection( ) {
   zzz->ResetSubset();
 }
+
+// [[Rcpp::export]]
+std::vector<bool> rcpp_return_selection( ) {
+  return zzz->mEnabled;
+}
+
 
 // [[Rcpp::export]]
 void rcpp_set_coef_values(DoubleVector& values) {
