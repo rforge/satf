@@ -56,6 +56,23 @@ BEGIN_RCPP
     return __sexp_result;
 END_RCPP
 }
+// rcpp_compute_logLikFn_gradient
+DoubleVector rcpp_compute_logLikFn_gradient(DoubleVector& coefs, bool by_row = false, bool tolerate_imprecision = true);
+RcppExport SEXP satf_rcpp_compute_logLikFn_gradient(SEXP coefsSEXP, SEXP by_rowSEXP, SEXP tolerate_imprecisionSEXP) {
+BEGIN_RCPP
+    SEXP __sexp_result;
+    {
+        Rcpp::RNGScope __rngScope;
+        Rcpp::traits::input_parameter< DoubleVector& >::type coefs(coefsSEXP );
+        Rcpp::traits::input_parameter< bool >::type by_row(by_rowSEXP );
+        Rcpp::traits::input_parameter< bool >::type tolerate_imprecision(tolerate_imprecisionSEXP );
+        DoubleVector __result = rcpp_compute_logLikFn_gradient(coefs, by_row, tolerate_imprecision);
+        PROTECT(__sexp_result = Rcpp::wrap(__result));
+    }
+    UNPROTECT(1);
+    return __sexp_result;
+END_RCPP
+}
 // rcpp_constrain_coefs
 DoubleVector rcpp_constrain_coefs(DoubleVector& coefs);
 RcppExport SEXP satf_rcpp_constrain_coefs(SEXP coefsSEXP) {
@@ -86,14 +103,26 @@ BEGIN_RCPP
     return __sexp_result;
 END_RCPP
 }
-// rcpp_select_subset
-void rcpp_select_subset(LogicalVector& selection);
-RcppExport SEXP satf_rcpp_select_subset(SEXP selectionSEXP) {
+// rcpp_select_subset_by_zero_dm_columns_any
+void rcpp_select_subset_by_zero_dm_columns_any(LogicalVector& zero_column);
+RcppExport SEXP satf_rcpp_select_subset_by_zero_dm_columns_any(SEXP zero_columnSEXP) {
 BEGIN_RCPP
     {
         Rcpp::RNGScope __rngScope;
-        Rcpp::traits::input_parameter< LogicalVector& >::type selection(selectionSEXP );
-        rcpp_select_subset(selection);
+        Rcpp::traits::input_parameter< LogicalVector& >::type zero_column(zero_columnSEXP );
+        rcpp_select_subset_by_zero_dm_columns_any(zero_column);
+    }
+    return R_NilValue;
+END_RCPP
+}
+// rcpp_select_subset_by_zero_dm_columns_all
+void rcpp_select_subset_by_zero_dm_columns_all(LogicalVector& zero_column);
+RcppExport SEXP satf_rcpp_select_subset_by_zero_dm_columns_all(SEXP zero_columnSEXP) {
+BEGIN_RCPP
+    {
+        Rcpp::RNGScope __rngScope;
+        Rcpp::traits::input_parameter< LogicalVector& >::type zero_column(zero_columnSEXP );
+        rcpp_select_subset_by_zero_dm_columns_all(zero_column);
     }
     return R_NilValue;
 END_RCPP
@@ -162,20 +191,6 @@ BEGIN_RCPP
         Rcpp::traits::input_parameter< DoubleVector& >::type noise(noiseSEXP );
         Rcpp::traits::input_parameter< DoubleVector& >::type rho_vec(rho_vecSEXP );
         DoubleVector __result = rcpp_correlate(trial_id, noise, rho_vec);
-        PROTECT(__sexp_result = Rcpp::wrap(__result));
-    }
-    UNPROTECT(1);
-    return __sexp_result;
-END_RCPP
-}
-// rcpp_get_dm
-NumericMatrix rcpp_get_dm();
-RcppExport SEXP satf_rcpp_get_dm() {
-BEGIN_RCPP
-    SEXP __sexp_result;
-    {
-        Rcpp::RNGScope __rngScope;
-        NumericMatrix __result = rcpp_get_dm();
         PROTECT(__sexp_result = Rcpp::wrap(__result));
     }
     UNPROTECT(1);

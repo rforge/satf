@@ -13,6 +13,10 @@ rcpp_compute_logLikFn <- function(coefs, by_row = FALSE, tolerate_imprecision = 
     .Call('satf_rcpp_compute_logLikFn', PACKAGE = 'satf', coefs, by_row, tolerate_imprecision)
 }
 
+rcpp_compute_logLikFn_gradient <- function(coefs, by_row = FALSE, tolerate_imprecision = TRUE) {
+    .Call('satf_rcpp_compute_logLikFn_gradient', PACKAGE = 'satf', coefs, by_row, tolerate_imprecision)
+}
+
 rcpp_constrain_coefs <- function(coefs) {
     .Call('satf_rcpp_constrain_coefs', PACKAGE = 'satf', coefs)
 }
@@ -21,8 +25,12 @@ rcpp_unconstrain_coefs <- function(coefs) {
     .Call('satf_rcpp_unconstrain_coefs', PACKAGE = 'satf', coefs)
 }
 
-rcpp_select_subset <- function(selection) {
-    invisible(.Call('satf_rcpp_select_subset', PACKAGE = 'satf', selection))
+rcpp_select_subset_by_zero_dm_columns_any <- function(zero_column) {
+    invisible(.Call('satf_rcpp_select_subset_by_zero_dm_columns_any', PACKAGE = 'satf', zero_column))
+}
+
+rcpp_select_subset_by_zero_dm_columns_all <- function(zero_column) {
+    invisible(.Call('satf_rcpp_select_subset_by_zero_dm_columns_all', PACKAGE = 'satf', zero_column))
 }
 
 rcpp_reset_selection <- function() {
@@ -43,9 +51,5 @@ rcpp_pnorm2d <- function(x_lower, y_lower, rho, second_order) {
 
 rcpp_correlate <- function(trial_id, noise, rho_vec) {
     .Call('satf_rcpp_correlate', PACKAGE = 'satf', trial_id, noise, rho_vec)
-}
-
-rcpp_get_dm <- function() {
-    .Call('satf_rcpp_get_dm', PACKAGE = 'satf')
 }
 

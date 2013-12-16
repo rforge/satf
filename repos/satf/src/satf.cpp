@@ -12,7 +12,7 @@ using namespace Rcpp;
 #include "satf.h"
 #include "satf_math.h"
 
-#define GET(TYPE, NAME) Rcpp::clone( Rcpp::as<TYPE>(params[NAME]) )
+
 
 #define debug_level 10
 
@@ -193,10 +193,12 @@ double CDesignMatrix::ComputeDprime(CCoefs& coefs, int datapoint_index, double t
   double asymptote = GetParameter(parameter_satf_asymptote, coefs, datapoint_index);
   if(asymptote == 0.0)
     return 0.0;
+  if(isnan(asymptote))
+    return asymptote;
   double invrate   = GetParameter(parameter_satf_invrate,  coefs, datapoint_index);
   double intercept = GetParameter(parameter_satf_intercept, coefs, datapoint_index);
   if(log)
-    printf("SATF(%f, %f, %f) = %f\n", asymptote, invrate, intercept, NAE(time, asymptote, invrate, intercept) );
+    printf("SATF(asymptote=%f, invrate=%f, intercept=%f) = %f\n", asymptote, invrate, intercept, NAE(time, asymptote, invrate, intercept) );
   return NAE(time, asymptote, invrate, intercept);
 }
 
@@ -209,7 +211,7 @@ double CDesignMatrix::ComputeCriterion(CCoefs& coefs, int datapoint_index, doubl
   double invrate = GetParameter(parameter_bias_invrate, coefs, datapoint_index);
   double intercept = GetParameter(parameter_bias_intercept, coefs, datapoint_index);
   if(log)
-    printf("criterion(%f, %f, %f, %f) = %f\n", min, max, invrate, intercept, SNAE(time, max, invrate, intercept, min) );
+    printf("criterion(max=%f, invrate=%f, intercept=%f, min=%f) = %f\n", max, invrate, intercept, min, SNAE(time, max, invrate, intercept, min) );
   return SNAE(time, max, invrate, intercept, min);
 }
 
@@ -393,52 +395,25 @@ void CDesignMatrix::DetermineZeroRows(LogicalVector& zero_columns, std::vector<b
     
 
 
-
 /******************************
- *   class CCoefConstraints   *
+ *      class CCoefs          *
  ******************************/
 
-CCoefConstraints::CCoefConstraints(Rcpp::NumericMatrix& coef_constraints) {
-    _dbg_method("constructor", 1);
-  
-    mCoefsLower = coef_constraints(_, 0);
-    mCoefsUpper = coef_constraints(_, 1);
 
-    // make a copy for SetCoefValues() / ResetCoefValues()
-    mCoefsLowerOriginal = clone( mCoefsLower );
-    mCoefsUpperOriginal = clone( mCoefsUpper );
+CCoefs::CCoefs(DoubleVector& coefs, Function fn, bool use_names,
+              CCoefConstraints* constraints) 
+{
+  mConstraints = constraints;
 
-    List dimnames(NumericMatrix(coef_constraints).attr("dimnames"));
-    if (dimnames.size() > 0) {
-      RObject names = dimnames[0];
-      if (!names.isNULL()) 
-      {
-        CharacterVector coef_names = CharacterVector(names);
-        _dbg((0, "copying <%d> names", coef_names.size() ));
-        for(int i=0; i < coef_names.size(); i++) {
-          mCoefNames.push_back( as< std::string >(coef_names[i]) );
-        }
-      }
-    }
-    
-  // FUTURE-TODO: Align the hyperparams by name
-  // if( params.containsElementNamed("hyperparams") )
-  //   mHyperparams = as<NumericMatrix>(params["hyperparams"]);
+  if(fn == FnConstrain) {
+    mUnconstrainedCoefs = coefs;
+    mConstrainedCoefs = Constrain( coefs, use_names);
+
+  } else {
+    mConstrainedCoefs = coefs;
+    mUnconstrainedCoefs = Unconstrain( coefs );
+  }
 }
-
-
-CCoefConstraints::~CCoefConstraints() {
-    _dbg_method("destructor", 1);
-}
-
-/*
-void CCoefConstraints::AddCoefficient(double lower, double upper, std::string& name) {
-    mCoefsLower.push_back(lower);
-    mCoefsUpper.push_back(upper);
-    mCoefNames.push_back(name);
-}
-*/
-
 
 
 double CCoefs::TransformWithOneBoundary(double x, double lower, Function fn) {
@@ -541,8 +516,7 @@ double CCoefs::TransformFn(int coef_index, Function fn)
 Rcpp::DoubleVector CCoefs::Constrain(Rcpp::DoubleVector& raw_coefs, bool use_names) {
   _dbg_method("Constrain", 1);
 
-  DoubleVector coefs;
-  double val;
+  DoubleVector coefs; double val;
 
   for(int i=0; i < mConstraints->mCoefsLower.size(); i++)
   {
@@ -558,8 +532,7 @@ DoubleVector CCoefs::Unconstrain(Rcpp::DoubleVector& raw_coefs)
 {
   _dbg_method("Unconstrain", 1);
 
-  DoubleVector coefs;
-  double val;
+  DoubleVector coefs; double val;
 
   for(int i=0; i < raw_coefs.size(); i++) {
       val = TransformFn(raw_coefs[i], mConstraints->mCoefsLower[i], mConstraints->mCoefsUpper[i], FnUnconstrain);
@@ -592,6 +565,40 @@ double CCoefs::CoefsLL()
   return 0;
 }
 
+
+
+
+/******************************
+ *   class CCoefConstraints   *
+ ******************************/
+
+CCoefConstraints::CCoefConstraints(Rcpp::NumericMatrix& coef_constraints) {
+    _dbg_method("constructor", 1);
+  
+    mCoefsLower = coef_constraints(_, 0);
+    mCoefsUpper = coef_constraints(_, 1);
+
+    // make a copy for SetCoefValues() / ResetCoefValues()
+    mCoefsLowerOriginal = clone( mCoefsLower );
+    mCoefsUpperOriginal = clone( mCoefsUpper );
+
+    List dimnames(NumericMatrix(coef_constraints).attr("dimnames"));
+    if (dimnames.size() > 0) {
+      RObject names = dimnames[0];
+      if (!names.isNULL()) 
+      {
+        CharacterVector coef_names = CharacterVector(names);
+        _dbg((0, "copying <%d> names", coef_names.size() ));
+        for(int i=0; i < coef_names.size(); i++) {
+          mCoefNames.push_back( as< std::string >(coef_names[i]) );
+        }
+      }
+    }
+}
+
+CCoefConstraints::~CCoefConstraints() {
+    _dbg_method("destructor", 1);
+}
 
 CCoefs CCoefConstraints::Constrain(Rcpp::DoubleVector& coefs, bool use_names) {
     return CCoefs(coefs, CCoefs::FnConstrain, use_names, this);
@@ -732,13 +739,15 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(CCoefs& coefs, bool by_row, boo
     double dprime = mDM.ComputeDprime(coefs, idx, mTime[idx]);
 
     if( !valid_dprime(dprime, LLVector, by_row) ) {
-      printf("criterion %f\n", mDM.ComputeCriterion(coefs, idx, mTime[idx], true) );
-      printf("dprime %f\n", mDM.ComputeDprime(coefs, idx, mTime[idx], true) );
+      mDM.ComputeCriterion(coefs, idx, mTime[idx], true);
+      mDM.ComputeDprime(coefs, idx, mTime[idx], true);
       return LLVector;
     }
     
-    _dbg((0, "idx <%d>, time <%.2f>, crit <%.2f>, dprime <%.2f>, resp. <%d>", idx, mTime[idx], mDM.ComputeCriterion(coefs, idx, mTime[idx]), 
-              mDM.ComputeDprime(coefs, idx, mTime[idx]), mDV.ResponseYes(idx) ));
+    _dbg((0, "idx <%d>, time <%.2f>, crit <%.2f>, dprime <%.2f>, resp. <%d>", 
+              idx, mTime[idx], mDM.ComputeCriterion(coefs, idx, mTime[idx]), 
+              mDM.ComputeDprime(coefs, idx, mTime[idx]), 
+              mDV.ResponseYes(idx) ));
     
     int response = mDV.ResponseYes(idx);
 
@@ -761,8 +770,8 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(CCoefs& coefs, bool by_row, boo
 
       if( !valid_probability(pNo, LLVector, by_row) ) {
         printf("coefs <%f, %f, %f, %f>\n", coefs[3], coefs[4], coefs[5], coefs[6]);
-        printf("criterion %f\n", mDM.ComputeCriterion(coefs, idx, mTime[idx], true) );
-        printf("dprime %f\n", mDM.ComputeDprime(coefs, idx, mTime[idx], true) );
+        mDM.ComputeCriterion(coefs, idx, mTime[idx], true);
+        mDM.ComputeDprime(coefs, idx, mTime[idx], true);
         printf("<%f, %f, %f, %f>\n", criterion, dprime, last_criterion, last_dprime);
         printf("corr.mrsat <%f>, crit_minus_psi <%.3f>, last_crit_minus_psi <%.3f>\n", corr_mrsat, crit_minus_psi, last_crit_minus_psi);
         return LLVector;
@@ -778,9 +787,7 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(CCoefs& coefs, bool by_row, boo
 
 DoubleVector CSATFData::ObjectiveFunction_Aggregate(CCoefs& coefs, bool by_row, DoubleVector* gradient)
 {
-  _dbg_method("ObjectiveFunction_Aggregate", -1);
-//printf("coef 2 <%f>\n", coefs[1]);
-
+  _dbg_method("ObjectiveFunction_Aggregate", 1);
   assert( mDV.GetRVType() == rv_aggregate);
 
   DoubleVector LLVector;

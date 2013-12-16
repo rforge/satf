@@ -136,7 +136,7 @@ NumericVector rcpp_get_constraints_upper() {
 }
 */
 
-#if 1
+#if 0
   #include "satf.cpp"
   #include "satf_math.cpp"
   #include "debug.cpp"

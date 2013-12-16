@@ -199,26 +199,11 @@ private:
   CCoefConstraints* mConstraints;
 };
 
-CCoefs::CCoefs(DoubleVector& coefs, Function fn, bool use_names,
-              CCoefConstraints* constraints) 
-{
-  mConstraints = constraints;
-
-  if(fn == FnConstrain) {
-    mUnconstrainedCoefs = coefs;
-    mConstrainedCoefs = Constrain( coefs, use_names);
-
-  } else {
-    mConstrainedCoefs = coefs;
-    mUnconstrainedCoefs = Unconstrain( coefs );
-  }
-}
-
-Rcpp::DoubleVector CCoefs::constrained() {
+inline Rcpp::DoubleVector CCoefs::constrained() {
   return mConstrainedCoefs;
 }
 
-Rcpp::DoubleVector CCoefs::unconstrained() {
+inline Rcpp::DoubleVector CCoefs::unconstrained() {
   return mUnconstrainedCoefs;
 }
 
