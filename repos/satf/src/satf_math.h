@@ -14,13 +14,20 @@ inline double _pnorm(double x, double mu=0.0, double sigma=1.0, bool lt=true, in
 inline double _dgamma(double x, double shp, double scl, bool lg=false) { return ::Rf_dgamma(x, shp, scl, lg?1:0); }
 inline double _dbinom(double x, double n, double p, bool lg=false)     { return ::Rf_dbinom(x, n, p, lg?1:0); }
 
-inline double SATF(double t, double asymptote, double invrate, double intercept) {
+
+// negatively accelerated exponential
+inline double NAE(double t, double asymptote, double invrate, double intercept) {
   if(asymptote == 0)
     return 0.0;
   else if(t <= intercept)
     return 0.0;
   else 
     return asymptote*(1-exp(-(1/invrate)*(t-intercept)));
+}
+
+// shifted negatively accelerated exponential
+inline double SNAE(double time, double max, double invrate, double intercept, double min) {
+	return NAE(time, max-min, invrate, intercept) + min;
 }
 
 #endif // __MATH_AUX_H__

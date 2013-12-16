@@ -22,13 +22,15 @@ class DebugMethod {
 #ifdef DEBUG
   #define _dbg_class_init                   static const char* m_dbg_class; static const int m_dbg_level
   #define _dbg_class_set(class_name, name, dbg_level) const char* class_name::m_dbg_class = name; const int class_name::m_dbg_level = dbg_level
-  #define _dbg_function(fn_name, at_level)  DebugMethod dbg_function(m_dbg_class, fn_name, m_dbg_level, at_level)
+  #define _dbg_method(fn_name, at_level)    DebugMethod dbg_function(m_dbg_class, fn_name, m_dbg_level, at_level)
+  #define _dbg_function(fn_name, at_level)  DebugMethod dbg_function("global", fn_name, global_dbg_level, at_level)
   #define _dbg_set_level(at_level)          dbg_function.set_level(at_level)
   #define _dbg(param)                       dbg_function.log param
 #else
   #define _dbg_class_init                   
   #define _dbg_class_set(class_name, name, dbg_level) 
-  #define _dbg_function(fn_name, at_level)  
+  #define _dbg_method(fn_name, at_level)  
+  #define _dbg_function(fn_name, at_level)
   #define _dbg_set_level(at_level)
   #define _dbg(param)                              
 #endif

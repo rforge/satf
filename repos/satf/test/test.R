@@ -5,7 +5,7 @@ source("~/CodeSATF/test/satf_load.R")
   fn.bias <- function(t) t*0 # SATF(t, asymptote=1, invrate=1, intercept=.4)
   fn.satf1 <- function(t) SATF(t, asymptote=3, invrate=1, intercept=.4)
   fn.satf2 <- function(t) SATF(t, asymptote=2, invrate=1, intercept=.4)
-  sim.n <- 10^3
+  sim.n <- 10^2
   time = seq(-.5,5,.5)
   data1 <- satf_generate(criterion=fn.bias, dprime=fn.satf1, time=time, n=sim.n, rho=.72, label="condition1")
   data2 <- satf_generate(criterion=fn.bias, dprime=fn.satf2, time=time, n=sim.n, rho=.72, label="condition2")
@@ -18,21 +18,66 @@ source("~/CodeSATF/test/satf_load.R")
   # data.nyes <- data.nyes[with(data.nyes, order(condition,signal, interval)),]
   data$c1 <- ifelse(data$condition=="condition1", 1, 0)
   data$c2 <- ifelse(data$condition=="condition2", 1, 0)
+  data.nyes$c1 <- ifelse(data.nyes$condition=="condition1", 1, 0)
+  data.nyes$c2 <- ifelse(data.nyes$condition=="condition2", 1, 0)
 
-  with(data, plot(time, criterion))
-  with(data.dprime, plot(time, c + dprime/2))
-
+#  with(data.nyes, plot(time, criterion))
+#  with(data.dprime, plot(time, c + dprime/2, col=condition))
 
 
 source("~/CodeSATF/test/satf_load.R")
 
-date()
-(p1.raw <- satf(dv=c(response=~response), signal=~signal,
+#data.nyes.cur <- data.nyes
+#print(data.nyes.cur)
+#save(data, file="/tmp/xxx.rda")
+(load("/tmp/xxx.rda"))
+
+
+(m.raw <- satf(dv=c(response=~response), signal=~signal,
+               start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+               contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+               bias = ~1+c2, constraints=list(), time=~time, #trial.id=~trial.id,
+               data=data, metric="logLikRaw", method="CG", debug=T))
+
+stop()
+
+
+
+(m.raw <- satf(dv=c(response=~response), signal=~signal,
+               start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+               contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+               bias = ~1+c2, constraints=list(), time=~time, #trial.id=~trial.id,
+               data=data, metric="logLikRaw"))
+stop()
+
+
+(m.nyes <- satf(dv=c(n.responses.yes=~n.responses.yes, n.responses=~n.responses), signal=~signal,
+                start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+                contrasts = c(asymptote=~1, invrate=~1, intercept=~1),
+                bias = ~1, constraints=list(), time=~time, data=data.nyes.cur, metric="logLik"))
+
+
+
+stop()
+
+
+(m.nyes <- satf(dv=c(n.responses.yes=~n.responses.yes, n.responses=~n.responses), signal=~signal,
+                start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+                contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+                bias = ~1+c2, constraints=list(), time=~time, data=data.nyes[1:4,], metric="logLik"))
+
+
+(m.raw <- satf(dv=c(response=~response), signal=~signal,
+               start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+               contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+               bias = ~1+c2, constraints=list(), time=~time, #trial.id=~trial.id,
+               data=data, metric="logLikRaw"))
+
+(m.raw <- satf(dv=c(response=~response), signal=~signal,
                 start     = c(asymptote=2, invrate=1, intercept=.4,
                               bias.min=-1, bias.max=1, bias.intercept=0, bias.invrate=1),
                 contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
-                bias = c(bias.min=~1, bias.max=~1, bias.intercept=~1, bias.invrate=~1), 
-                constraints=list(), time=~time, trial.id=~trial.id,
+                bias = ~1+c2, constraints=list(), time=~time, #trial.id=~trial.id,
                 data=data, metric="logLik"))
 date()
 
@@ -42,7 +87,7 @@ source("./satf_load.R")
 (p1.nyes1 <- satf(dv=c(n.responses.yes=~n.responses.yes, n.responses=~n.responses), signal=~signal,
                 start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
                 contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
-                bias = ~1, constraints=list(), time=~time, data=data.nyes, metric="logLik"))
+                bias = ~1+c2, constraints=list(), time=~time, data=data.nyes, metric="logLik"))
 
 
 

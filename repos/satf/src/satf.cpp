@@ -16,10 +16,10 @@ using namespace Rcpp;
 
 #define debug_level 10
 
-_dbg_class_set(CCoefConstraints, "CCoefConstraints", 0);
+_dbg_class_set(CCoefConstraints, "CCoefConstraints", 10);
 _dbg_class_set(CDependentVariable, "CDependentVariable", 0);
-_dbg_class_set(CDesignMatrix, "CDesignMatrix",0);
-_dbg_class_set(CSATFData, "CSATFData", 0);
+_dbg_class_set(CDesignMatrix, "CDesignMatrix", 0);
+_dbg_class_set(CSATFData, "CSATFData", 10);
 
 
 int getMilliCount(){
@@ -43,7 +43,7 @@ int getMilliSpan(int nTimeStart){
 
 CDependentVariable::CDependentVariable(CharacterVector& dv, CharacterVector& cnames, DataFrame& data)
 {
-  _dbg_function("constructor", 1);
+  _dbg_method("constructor", 1);
 
   if( dv.containsElementNamed("response") ) {
     _dbg((1, "assigning 1"));
@@ -71,18 +71,27 @@ CDependentVariable::CDependentVariable(CharacterVector& dv, CharacterVector& cna
   }
 }
 
+CDependentVariable::~CDependentVariable()
+{
+  _dbg_method("destructor", 1);
+}
+
 /**********************************
  *   class CDesignMatrix  *
  **********************************/
 
 CDesignMatrix::CDesignMatrix(Rcpp::NumericMatrix& dm, Rcpp::IntegerVector& dm_ncoef):  
+                                        mCoefTypes(dm.ncol(), -1),
                                         mCoefIndexFirst(parameter_invalid, -1),
                                         mCoefIndexLast(parameter_invalid, -1)
 {
-  _dbg_function("constructor", 1);
+  _dbg_method("constructor", 1);
 
+  // copy design matrix
   mDM = Rcpp::clone(dm);
 
+
+  // create a mapping from parameter type to coefficient indices
   CharacterVector ncoef_names = dm_ncoef.names();
   int cur_coef_index = 0;
   for(int i=0; i < dm_ncoef.size(); i++) {
@@ -92,7 +101,18 @@ CDesignMatrix::CDesignMatrix(Rcpp::NumericMatrix& dm, Rcpp::IntegerVector& dm_nc
     mCoefIndexLast[parameter] = mCoefIndexFirst[parameter] + dm_ncoef[i] - 1;
     cur_coef_index += dm_ncoef[i];
   }
-  
+
+  // create a mapping from coefficient index to parameter type
+  for(size_t i=0; i < mCoefIndexFirst.size(); i++) {
+      if(mCoefIndexFirst[i] < 0)
+        continue;
+        
+      for(int j=mCoefIndexFirst[i]; j <= mCoefIndexLast[i]; j++) {
+          mCoefTypes[j] = i;
+      }
+  }
+
+  // save coefficient names
   List dimnames(dm.attr("dimnames"));
   if(dimnames.size() > 1) 
   {
@@ -108,8 +128,12 @@ CDesignMatrix::CDesignMatrix(Rcpp::NumericMatrix& dm, Rcpp::IntegerVector& dm_nc
 
 }
 
-// void CDesignMatrix::StringToParameter(std::string& name) {  
-// }
+
+CDesignMatrix::~CDesignMatrix()
+{
+  _dbg_method("destructor", 1);
+  _dbg((0, "destructing"));
+}
 
 
 CDesignMatrix::Parameter CDesignMatrix::StringToParameter(std::string& name)
@@ -141,9 +165,9 @@ CDesignMatrix::Parameter CDesignMatrix::StringToParameter(std::string& name)
   return parameter_invalid;
 }
 
-double CDesignMatrix::GetParameter(Parameter parameter, DoubleVector& coefs, int datapoint_index)  
+double CDesignMatrix::GetParameter(Parameter parameter, CCoefs& coefs, int datapoint_index)  
 {
-    _dbg_function("GetParameter", 1);
+    _dbg_method("GetParameter", 1);
     double cur_coef, param = 0.0;
 
     if(!HasParameter(parameter))
@@ -163,31 +187,173 @@ double CDesignMatrix::GetParameter(Parameter parameter, DoubleVector& coefs, int
     return(param);
 }
 
-double CDesignMatrix::ComputeDprime(Rcpp::DoubleVector& coefs, int datapoint_index, double time, bool log) 
+double CDesignMatrix::ComputeDprime(CCoefs& coefs, int datapoint_index, double time, bool log) 
 {
-  _dbg_function("ComputeDprime", 1);
+  _dbg_method("ComputeDprime", 1);
   double asymptote = GetParameter(parameter_satf_asymptote, coefs, datapoint_index);
   if(asymptote == 0.0)
     return 0.0;
   double invrate   = GetParameter(parameter_satf_invrate,  coefs, datapoint_index);
   double intercept = GetParameter(parameter_satf_intercept, coefs, datapoint_index);
   if(log)
-    printf("SATF(%f, %f, %f) = %f\n", asymptote, invrate, intercept, SATF(time, asymptote, invrate, intercept) );
-  return SATF(time, asymptote, invrate, intercept);
+    printf("SATF(%f, %f, %f) = %f\n", asymptote, invrate, intercept, NAE(time, asymptote, invrate, intercept) );
+  return NAE(time, asymptote, invrate, intercept);
 }
 
 // This is what Wickens (2001) calls lambda_center in equation (2.5) 
-double CDesignMatrix::ComputeCriterion(Rcpp::DoubleVector& coefs, int datapoint_index, double time, bool log) 
+double CDesignMatrix::ComputeCriterion(CCoefs& coefs, int datapoint_index, double time, bool log) 
 {
-  _dbg_function("ComputeCprime", 1);
+  _dbg_method("ComputeCprime", 1);
   double min = GetParameter(parameter_bias_min, coefs, datapoint_index);
   double max = GetParameter(parameter_bias_max, coefs, datapoint_index);
   double invrate = GetParameter(parameter_bias_invrate, coefs, datapoint_index);
   double intercept = GetParameter(parameter_bias_intercept, coefs, datapoint_index);
   if(log)
-    printf("criterion(%f, %f, %f, %f) = %f\n", min, max, invrate, intercept, (SATF(time, max-min, invrate, intercept) + min) );
-  return SATF(time, max-min, invrate, intercept) + min;
+    printf("criterion(%f, %f, %f, %f) = %f\n", min, max, invrate, intercept, SNAE(time, max, invrate, intercept, min) );
+  return SNAE(time, max, invrate, intercept, min);
 }
+
+
+double CDesignMatrix::ComputeLogLik_Independent(CCoefs& coefs, int datapoint_index, double time, 
+                                                int n_responses_yes, int n_responses, DoubleVector* gradient) 
+{
+	_dbg_method("ComputeLogLik_Independent", 1);
+
+  double dprime_asymptote = GetParameter(parameter_satf_asymptote, coefs, datapoint_index);
+  double dprime_invrate   = GetParameter(parameter_satf_invrate,  coefs, datapoint_index);
+  double dprime_intercept = GetParameter(parameter_satf_intercept, coefs, datapoint_index);
+  double dprime = NAE(time, dprime_asymptote, dprime_invrate, dprime_intercept);
+
+  double criterion_max = GetParameter(parameter_bias_max, coefs, datapoint_index);
+  double criterion_invrate = GetParameter(parameter_bias_invrate, coefs, datapoint_index);
+  double criterion_intercept = GetParameter(parameter_bias_intercept, coefs, datapoint_index);
+  double criterion_min = GetParameter(parameter_bias_min, coefs, datapoint_index);
+  double criterion = SNAE(time, criterion_max, criterion_invrate, criterion_intercept, criterion_min);
+
+  if(gradient != NULL) {
+    ComputeGradient(coefs, datapoint_index, dprime_asymptote, dprime_invrate, dprime_intercept, 
+                    criterion_max, criterion_invrate, criterion_intercept, criterion_min,
+                    criterion, dprime, time, n_responses_yes, n_responses, *gradient);
+  }
+
+	double pYes = _pnorm(-(criterion-dprime) );
+	return _dbinom(n_responses_yes, n_responses, pYes, true );      
+}
+
+
+void CDesignMatrix::ComputeGradient(CCoefs& coefs, int datapoint_index,
+                                     double dprime_asymptote, double dprime_invrate, double dprime_intercept, 
+                                     double criterion_max, double criterion_invrate, double criterion_intercept, double criterion_min,
+                                     double criterion, double dprime, double t, int n_responses_yes, int n_responses, DoubleVector& gradients)
+{
+    if( gradients.size() != coefs.size() )
+      return;
+
+    double criterion_tau = exp(-(t-criterion_intercept)/criterion_invrate);
+    double criterion_at = (criterion_max- criterion_min)*criterion_tau - criterion_max + dprime; 
+    double criterion_dnorm_at = _dnorm(criterion_at);
+    double criterion_pnorm_at = _pnorm(criterion_at);
+    double criterion_eta = criterion_pnorm_at*(-1+criterion_pnorm_at);
+
+    double dprime_tau = exp(-(t-dprime_intercept)/dprime_invrate);
+    double dprime_at = -criterion + dprime_asymptote - dprime_asymptote*dprime_tau;
+    double dprime_dnorm_at = _dnorm(dprime_at);
+    double dprime_pnorm_at = _pnorm(dprime_at);
+    double dprime_eta = dprime_pnorm_at * (-1 + dprime_pnorm_at);
+
+    for(int coef_idx = 0; coef_idx < coefs.size(); coef_idx++)
+    {
+        double gradient = 0;
+
+        double w = mDM(datapoint_index, coef_idx);
+        double criterion_zeta = w * criterion_dnorm_at * criterion_tau;
+        double dprime_zeta = w * dprime_dnorm_at * dprime_asymptote * dprime_tau;
+
+        if(w != 0)
+        {
+          switch(mCoefTypes[coef_idx])
+          {
+              case parameter_satf_asymptote:
+                if(t < dprime_intercept)
+                  continue;
+
+                gradient = -(dprime_dnorm_at * w) / dprime_eta;
+                gradient = gradient * (n_responses_yes*(1- dprime_tau) 
+                                    + (-1 + dprime_tau)*n_responses * dprime_pnorm_at );
+                break;
+
+              case parameter_satf_invrate:
+                if(t < dprime_intercept)
+                  continue;
+
+                gradient = -dprime_zeta / ( dprime_eta * pow(dprime_invrate,2) );
+                gradient = gradient * ((-t+dprime_intercept) * n_responses_yes 
+                                       + n_responses * dprime_pnorm_at * (t-dprime_intercept));
+                break;
+
+              case parameter_satf_intercept:
+                if(t < dprime_intercept)
+                  continue;
+
+                gradient = -dprime_zeta / ( dprime_eta * dprime_invrate );
+                gradient = gradient * (-n_responses_yes + n_responses * dprime_pnorm_at);
+                break;
+
+              case parameter_bias_max:
+                if(t < criterion_intercept)
+                  continue;
+
+                gradient = criterion_dnorm_at * w / criterion_eta;
+                gradient = gradient * (n_responses_yes - n_responses*criterion_pnorm_at  + 
+                                      (n_responses*criterion_pnorm_at - n_responses_yes)*criterion_tau );
+                break;
+ 
+            case parameter_bias_invrate:
+              if(t < criterion_intercept)
+                continue;
+              {
+                double t_minus_intercept = (t - criterion_intercept);
+                double intercept_minus_t = (criterion_intercept - t);
+
+                gradient = criterion_zeta / (criterion_eta * pow(criterion_invrate,2));
+                gradient = gradient*(n_responses_yes*(criterion_max*intercept_minus_t + criterion_min*t_minus_intercept)
+                            + n_responses*criterion_pnorm_at*(criterion_max*t_minus_intercept + criterion_min*intercept_minus_t));
+              }
+                break;
+
+            case parameter_bias_intercept:
+              if(t < criterion_intercept)
+                continue;
+               gradient = criterion_zeta / ( criterion_eta * criterion_invrate );
+               gradient = gradient*(n_responses_yes*(-criterion_max+criterion_min) + n_responses*criterion_pnorm_at*(criterion_max-criterion_min));
+              break;
+
+            case parameter_bias_min:
+              if(t > criterion_intercept) {
+                  gradient = -criterion_zeta / criterion_eta;
+                  gradient = gradient*( -n_responses_yes + n_responses*criterion_pnorm_at );
+
+              } else  {
+                  double dnorm_at = _dnorm(-criterion + dprime);
+                  double pnorm_at = _pnorm(-criterion + dprime);
+                  gradient = -( dnorm_at*w*(-n_responses_yes+n_responses*pnorm_at) );
+                  gradient = gradient / ( pnorm_at*(-1+pnorm_at) );
+              }
+              break;
+
+            case parameter_corr_mrsat:
+                // No derivative for this parameter yet.
+                break;
+
+
+          };
+          double x_Dtransform = coefs.TransformFn( coef_idx, CCoefs::FnConstrainDerivative );
+          gradient = gradient * x_Dtransform;
+          gradients[coef_idx] += gradient;
+      }
+    }
+}
+
 
 int CDesignMatrix::FindColumnIndex(std::string& column_name) {
     for(size_t i=0; i < mCoefNames.size(); i++){
@@ -199,35 +365,29 @@ int CDesignMatrix::FindColumnIndex(std::string& column_name) {
 
 void CDesignMatrix::DetermineZeroRows(LogicalVector& zero_columns, std::vector<bool>& row_selected, bool all)
 {
-    for(int i=0; i < row_selected.size(); i++) {
-      if(all)
-        row_selected[i] = true;
-      else
-        row_selected[i] = false;
+    for(size_t i=0; i < row_selected.size(); i++) {
+      if(all) row_selected[i] = true;
+      else    row_selected[i] = false;
     }
-  
+    
     CharacterVector column_names = zero_columns.names();
     for(int i=0; i < zero_columns.size(); i++) 
     {
       std::string column_name = as<std::string>(column_names[i]);
       bool zero_column = zero_columns[i];
       int col_idx = FindColumnIndex(column_name);
-      
+
       for(int row_idx=0; row_idx < mDM.nrow(); row_idx++) 
       {
         double cur_value = mDM(row_idx, col_idx);
         if(all) {
-            if(zero_column)
-              row_selected[row_idx] = row_selected[row_idx] & (cur_value == 0.0);
-            else
-              row_selected[row_idx] = row_selected[row_idx] & (cur_value != 0.0);
+            if(zero_column) row_selected[row_idx] = row_selected[row_idx] & (cur_value == 0.0);
+            else            row_selected[row_idx] = row_selected[row_idx] & (cur_value != 0.0);
         } else {
-            if(zero_column)
-              row_selected[row_idx] = row_selected[row_idx] | (cur_value == 0.0);
-            else
-              row_selected[row_idx] = row_selected[row_idx] | (cur_value != 0.0);
+            if(zero_column) row_selected[row_idx] = row_selected[row_idx] | (cur_value == 0.0);
+            else            row_selected[row_idx] = row_selected[row_idx] | (cur_value != 0.0);
         }
-      }  
+      }
     }
 }
     
@@ -239,7 +399,7 @@ void CDesignMatrix::DetermineZeroRows(LogicalVector& zero_columns, std::vector<b
  ******************************/
 
 CCoefConstraints::CCoefConstraints(Rcpp::NumericMatrix& coef_constraints) {
-    _dbg_function("constructor", 1);
+    _dbg_method("constructor", 1);
   
     mCoefsLower = coef_constraints(_, 0);
     mCoefsUpper = coef_constraints(_, 1);
@@ -266,6 +426,11 @@ CCoefConstraints::CCoefConstraints(Rcpp::NumericMatrix& coef_constraints) {
   //   mHyperparams = as<NumericMatrix>(params["hyperparams"]);
 }
 
+
+CCoefConstraints::~CCoefConstraints() {
+    _dbg_method("destructor", 1);
+}
+
 /*
 void CCoefConstraints::AddCoefficient(double lower, double upper, std::string& name) {
     mCoefsLower.push_back(lower);
@@ -274,79 +439,167 @@ void CCoefConstraints::AddCoefficient(double lower, double upper, std::string& n
 }
 */
 
-double CCoefConstraints::TransformWithOneBoundary(double x, double lower, bool constrain) {
-  if(constrain) // [-Inf, +Inf] -> [lower, +Inf]
-    return pow(x, 2)+lower;
-  else // [lower, +Inf] -> [-Inf, +Inf]
-    return sqrt(x - lower);
+
+
+double CCoefs::TransformWithOneBoundary(double x, double lower, Function fn) {
+  switch(fn) {
+    case FnConstrain: // [-Inf, +Inf] -> [lower, +Inf]
+      return pow(x, 2)+lower;
+
+    case FnConstrainDerivative:
+      return 2*x;
+
+    case FnUnconstrain:  // [lower, +Inf] -> [-Inf, +Inf]
+      return sqrt(x - lower);
+  };
+  return nan("");
 }
 
-double CCoefConstraints::TransformWithTwoBoundaries(double x, double lower, double upper, bool constrain) {
-  if(constrain) { // [-Inf, +Inf] -> [0, 1] -> [lower, upper]
-    double y = exp(x)/(1+exp(x));
-    double z = y*(upper-lower)+lower;
-    return(z);
+double CCoefs::TransformWithTwoBoundaries(double x, double lower, double upper, Function fn) {
+  switch(fn) {
+    case FnConstrain: // [-Inf, +Inf] -> [0, 1] -> [lower, upper]
+    {
+        double y = exp(x)/(1+exp(x));
+        double z = y*(upper-lower)+lower;
+        return(z);
+    }
+    break;
 
-  } else // [lower, upper] -> [0, 1] -> [-Inf, +Inf]
-  { 
-    double y = (x-lower)/(upper-lower);
-    double z = log(y/(1-y));
-    return(z);
-  }
+    case FnConstrainDerivative:
+    {
+      return exp(x)*(upper-lower)/(1+exp(x)) - pow(exp(x),2)*(upper-lower)/pow(1+exp(x), 2);
+    }
+    break;
+    
+    case FnUnconstrain: // [lower, upper] -> [0, 1] -> [-Inf, +Inf]
+    {
+        double y = (x-lower)/(upper-lower);
+        double z = log(y/(1-y));
+        return(z);
+    }
+    break;
+  };
+  return nan("");
 }
-double CCoefConstraints::TransformCoef(double raw_coef, int i, bool constrain)
+
+
+double CCoefs::TransformFn(double raw_coef, double lower, double upper, Function fn)
 {
-  _dbg_function("TransformCoef", 1);
+  _dbg_method("TransformFn 1", 1);
 
-  if( IsCoefFixed(i) ) {
-    return raw_coef;
+  if( lower == upper ) {
+    switch(fn) {
+      case FnConstrainDerivative:
+        return 0;
 
-  } else if(mCoefsLower[i] == R_NegInf && mCoefsUpper[i] == R_PosInf) {
-    return raw_coef; 
+      case FnConstrain:
+      case FnUnconstrain:
+        return raw_coef;
+    };
+  
+  } else if(lower == R_NegInf && upper == R_PosInf) {
+    switch(fn) {
+      case FnConstrainDerivative:
+        return 1;
 
-  } else if(mCoefsUpper[i] == R_PosInf ) {
-    return TransformWithOneBoundary(raw_coef, mCoefsLower[i], constrain);
+      case FnConstrain:
+      case FnUnconstrain:
+        return raw_coef;
+    };
 
-  } else if( mCoefsLower[i] == R_NegInf) {
-    return -1*TransformWithOneBoundary(-raw_coef, -mCoefsUpper[i], constrain);
+  } else if(upper == R_PosInf ) {
+    return TransformWithOneBoundary(raw_coef, lower, fn);
+
+  } else if(lower == R_NegInf) {
+    return -1*TransformWithOneBoundary(-raw_coef, -upper, fn);
     
   } else {
-    return TransformWithTwoBoundaries(raw_coef, mCoefsLower[i], mCoefsUpper[i], constrain);
+    return TransformWithTwoBoundaries(raw_coef, lower, upper, fn);
+    
   }
+  return nan("");
 }
 
-Rcpp::DoubleVector CCoefConstraints::Constrain(Rcpp::DoubleVector& raw_coefs, bool use_names) {
-  _dbg_function("Constrain", 1);
+
+double CCoefs::TransformFn(int coef_index, Function fn)
+{
+  _dbg_method("TransformFn 2", 1);
+  switch(fn) {
+    case FnConstrain:
+    case FnConstrainDerivative:
+        return TransformFn(mUnconstrainedCoefs[coef_index], mConstraints->mCoefsLower[coef_index], 
+                         mConstraints->mCoefsUpper[coef_index], fn);
+
+    case FnUnconstrain:
+        return TransformFn(mConstrainedCoefs[coef_index], mConstraints->mCoefsLower[coef_index], 
+                         mConstraints->mCoefsUpper[coef_index], fn);
+  };
+  return nan("");
+}
+
+
+Rcpp::DoubleVector CCoefs::Constrain(Rcpp::DoubleVector& raw_coefs, bool use_names) {
+  _dbg_method("Constrain", 1);
 
   DoubleVector coefs;
   double val;
 
-  for(int i=0; i < mCoefsLower.size(); i++)
+  for(int i=0; i < mConstraints->mCoefsLower.size(); i++)
   {
-    val = TransformCoef(raw_coefs[i], i, true);
+    val = TransformFn(raw_coefs[i], mConstraints->mCoefsLower[i], mConstraints->mCoefsUpper[i], FnConstrain);
 
-    if(use_names)
-      coefs.push_back( val, mCoefNames[i] );  
-    else
-      coefs.push_back( val );  
+    if(use_names) coefs.push_back( val, mConstraints->mCoefNames[i] );  
+    else          coefs.push_back( val );  
   }
   return coefs;
 }
 
-DoubleVector CCoefConstraints::Unconstrain(Rcpp::DoubleVector& raw_coefs)
+DoubleVector CCoefs::Unconstrain(Rcpp::DoubleVector& raw_coefs)
 {
-  _dbg_function("Unconstrain", 1);
+  _dbg_method("Unconstrain", 1);
 
   DoubleVector coefs;
   double val;
 
   for(int i=0; i < raw_coefs.size(); i++) {
-      val = TransformCoef(raw_coefs[i], i, false);
+      val = TransformFn(raw_coefs[i], mConstraints->mCoefsLower[i], mConstraints->mCoefsUpper[i], FnUnconstrain);
       coefs.push_back( val );
   }
   return coefs;
 }
 
+
+double CCoefs::CoefsLL()
+{
+/*  _dbg_method("CoefsLL", 1);
+
+  if( mHyperparams.length() == 0 )
+    return 0;
+    
+  assert( mHyperparams.ncol() == 2 );
+  assert( mHyperparams.nrow() == mDM.nrow() );
+
+  double LL = 0;
+  if( mHyperparams.nrow()*mHyperparams.ncol() == 0 )
+    return 0;
+  
+  for(size_t i=0; i < mDM.nCoefs(); i++) {
+    NumericVector hyperparams = mHyperparams( _, i);
+    LL += _dgamma(coefs[i], hyperparams[0], hyperparams[1], true);
+  }
+  return LL;
+  */
+  return 0;
+}
+
+
+CCoefs CCoefConstraints::Constrain(Rcpp::DoubleVector& coefs, bool use_names) {
+    return CCoefs(coefs, CCoefs::FnConstrain, use_names, this);
+}
+
+CCoefs CCoefConstraints::Unconstrain(Rcpp::DoubleVector& coefs) {
+    return CCoefs(coefs, CCoefs::FnUnconstrain, false, this);
+}
 
 bool CCoefConstraints::SetCoefValue(std::string name, double value) {
     int coef_idx = FindCoefIndex(name);
@@ -393,29 +646,6 @@ void CCoefConstraints::ResetCoefValues(CharacterVector& names) {
     }
 }
 
-double CCoefConstraints::CoefsLL(DoubleVector& coefs)
-{
-/*  _dbg_function("CoefsLL", 1);
-
-  if( mHyperparams.length() == 0 )
-    return 0;
-    
-  assert( mHyperparams.ncol() == 2 );
-  assert( mHyperparams.nrow() == mDM.nrow() );
-
-  double LL = 0;
-  if( mHyperparams.nrow()*mHyperparams.ncol() == 0 )
-    return 0;
-  
-  for(size_t i=0; i < mDM.nCoefs(); i++) {
-    NumericVector hyperparams = mHyperparams( _, i);
-    LL += _dgamma(coefs[i], hyperparams[0], hyperparams[1], true);
-  }
-  return LL;
-  */
-  return 0;
-}
-
 
 
 /******************************
@@ -428,7 +658,7 @@ CSATFData::CSATFData(Rcpp::CharacterVector& dv, Rcpp::NumericMatrix& dm,
                 mDM(dm, dm_ncoef), mDV(dv, cnames, data), 
                 mCoefConstraints(constraints)
 {
-    _dbg_function("constructor", 1);
+    _dbg_method("constructor", 1);
 
     std::string name_time = as< std::string >(cnames["time"]);
     mTime = as< std::vector<double> >(data[name_time]);
@@ -470,16 +700,14 @@ inline bool valid_probability(double probability, DoubleVector& LLVector, bool b
  * by_row: if true, returns a vector with log-likelihoods for every datapoint
  * tolerate_imprecisions: if true, tolerates and fixes minor imprecisions in the approximation to the conditional multivariate normal CDF
 */
-DoubleVector CSATFData::ObjectiveFunction_Binary(DoubleVector& coefs, bool by_row, bool tolerate_imprecisions)
+DoubleVector CSATFData::ObjectiveFunction_Binary(CCoefs& coefs, bool by_row, bool tolerate_imprecisions, DoubleVector* gradient)
 {
-  _dbg_function("ObjectiveFunction_Binary", -1);
+  _dbg_method("ObjectiveFunction_Binary", -1);
   assert( mDV.GetRVType() == rv_binary);
   _dbg((0, "rv_type: %d, datapoints: %d", mDV.GetRVType(), mDM.nDatapoints()));
 
   DoubleVector LLVector;
   double corr_mrsat = 0;
-  double last_dprime = 0, last_criterion = 0;
-  int last_response = 0;
 
   if(!by_row)
     LLVector.push_back( 0 );
@@ -489,10 +717,19 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(DoubleVector& coefs, bool by_ro
   {
     if(!mEnabled[idx])
       continue;
-
-    int response = mDV.ResponseYes(idx);
-    double dprime = mDM.ComputeDprime(coefs, idx, mTime[idx]);
+    
+    // get mrsat-correlation parameter if there is one
+    if( mDM.HasParameter( CDesignMatrix::parameter_corr_mrsat ) ) {
+      corr_mrsat = mDM.GetParameter(CDesignMatrix::parameter_corr_mrsat, coefs, idx);
+      if( isnan(corr_mrsat) ) {
+          printf("SATF WARNING: corr_mrsat is NaN.\n");
+          save_LL(LLVector, R_NaN, by_row);
+          return false;
+      }
+    }
+      
     double criterion = mDM.ComputeCriterion(coefs, idx, mTime[idx]);
+    double dprime = mDM.ComputeDprime(coefs, idx, mTime[idx]);
 
     if( !valid_dprime(dprime, LLVector, by_row) ) {
       printf("criterion %f\n", mDM.ComputeCriterion(coefs, idx, mTime[idx], true) );
@@ -500,27 +737,25 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(DoubleVector& coefs, bool by_ro
       return LLVector;
     }
     
-    _dbg((0, "idx <%d>, time <%.2f>, crit <%.2f>, dprime <%.2f>, resp. <%d>", idx, mTime[idx], criterion, dprime, response ));
+    _dbg((0, "idx <%d>, time <%.2f>, crit <%.2f>, dprime <%.2f>, resp. <%d>", idx, mTime[idx], mDM.ComputeCriterion(coefs, idx, mTime[idx]), 
+              mDM.ComputeDprime(coefs, idx, mTime[idx]), mDV.ResponseYes(idx) ));
     
-    // get mrsat-correlation parameter if there is one
-    if( mDM.HasParameter( CDesignMatrix::parameter_corr_mrsat ) ) {
-      corr_mrsat = mDM.GetParameter(CDesignMatrix::parameter_corr_mrsat, coefs, idx);
-      if( isnan(dprime) ) {
-          printf("SATF WARNING: corr_mrsat is NaN.\n");
-          save_LL(LLVector, R_NaN, by_row);
-          return false;
-      }
-    }
+    int response = mDV.ResponseYes(idx);
 
-    double pNo, cur_LL;
+    double cur_LL;
     if( corr_mrsat == 0.0 ) {
-        cur_LL = _pnorm(criterion, dprime, 1.0, response==0, true);
+      cur_LL = mDM.ComputeLogLik_Independent(coefs, idx, mTime[idx], response, 1, gradient);
 
     } else 
     {
+      double last_criterion = mDM.ComputeCriterion(coefs, idx-1, mTime[idx-1]);
+      double last_dprime = mDM.ComputeDprime(coefs, idx-1, mTime[idx-1]);
+      int last_response = mDV.ResponseYes(idx-1);
+
+      // TODO: take care of last_dprime, and last_crit
       double crit_minus_psi = criterion - dprime;
       double last_crit_minus_psi = last_criterion - last_dprime;
-      pNo = pnorm_conditional(corr_mrsat, crit_minus_psi, last_crit_minus_psi, last_response==1, tolerate_imprecisions);
+      double pNo = pnorm_conditional(corr_mrsat, crit_minus_psi, last_crit_minus_psi, last_response==1, tolerate_imprecisions);
 
       _dbg((0, "corr.mrsat <%f>, crit_minus_psi <%.3f>, last_crit_minus_psi <%.3f>", corr_mrsat, crit_minus_psi, last_crit_minus_psi));
 
@@ -536,18 +771,14 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(DoubleVector& coefs, bool by_ro
       if(mDV.ResponseYes(idx) == 1) cur_LL = log(1-pNo);
       else                          cur_LL = log(pNo);
     }
-    last_dprime = dprime;
-    last_criterion = criterion;
-    last_response = response;
-
     save_LL(LLVector, cur_LL, by_row);
   }
   return LLVector;
 }
 
-DoubleVector CSATFData::ObjectiveFunction_Aggregate(Rcpp::DoubleVector& coefs, bool by_row)
+DoubleVector CSATFData::ObjectiveFunction_Aggregate(CCoefs& coefs, bool by_row, DoubleVector* gradient)
 {
-  _dbg_function("ObjectiveFunction_Aggregate", -1);
+  _dbg_method("ObjectiveFunction_Aggregate", -1);
 //printf("coef 2 <%f>\n", coefs[1]);
 
   assert( mDV.GetRVType() == rv_aggregate);
@@ -561,15 +792,11 @@ DoubleVector CSATFData::ObjectiveFunction_Aggregate(Rcpp::DoubleVector& coefs, b
     if(!mEnabled[idx])
       continue;
 
-    double dprime = mDM.ComputeDprime(coefs, idx, mTime[idx]);
-    double criterion = mDM.ComputeCriterion(coefs, idx, mTime[idx]);
+    double cur_LL = mDM.ComputeLogLik_Independent(coefs, idx, mTime[idx], mDV.NResponsesYes(idx), mDV.NResponses(idx), gradient);
 
-    double pYes = 1-_pnorm(criterion, dprime);
-    int n_responses_yes = mDV.NResponsesYes(idx);
-    int n_responses = mDV.NResponses(idx);
-    double cur_LL = _dbinom(n_responses_yes, n_responses, pYes, true );
-    _dbg((0, "idx <%d>, criterion <%.3f>, dprime <%.3f>, p_yes <%.3f>, log-lik(%d/%d)=%.3f", 
-              idx, criterion, dprime, pYes, n_responses_yes, n_responses, cur_LL));
+    _dbg((0, "idx <%d>, criterion <%.3f>, dprime <%.3f>, log-lik(%d/%d)=%.3f", 
+              idx, mDM.ComputeCriterion(coefs, idx, mTime[idx]), 
+              mDM.ComputeDprime(coefs, idx, mTime[idx]), mDV.NResponsesYes(idx), mDV.NResponses(idx), cur_LL));
 
     save_LL(LLVector, cur_LL, by_row);
   }
@@ -577,34 +804,31 @@ DoubleVector CSATFData::ObjectiveFunction_Aggregate(Rcpp::DoubleVector& coefs, b
   return LLVector;
 }
 
-Rcpp::DoubleVector CSATFData::ObjectiveFunction(DoubleVector& raw_coefs, bool by_row, bool tolerate_imprecisions)
+Rcpp::DoubleVector CSATFData::ObjectiveFunction(DoubleVector& raw_coefs, bool by_row, 
+                                                bool tolerate_imprecisions, DoubleVector* gradient)
 {
-  _dbg_function("ObjectiveFunction", 1);
+  _dbg_method("ObjectiveFunction", 1);
 
   assert(coefs.length() == mnCoefs || coefs.length() == mnCoefs+1 );
 
   // transform coefficients
-  DoubleVector coefs = ConstrainCoefs(raw_coefs, false);
+  CCoefs coefs = mCoefConstraints.Constrain(raw_coefs, false);
 
   // init the log-likelihood vector with the log-likelihood of the parameters, given the hyperparameters (or 0 if there are none)
   DoubleVector LL(1);
-  LL[0] = mCoefConstraints.CoefsLL(coefs);
+  LL[0] = coefs.CoefsLL();
   
   // compute the log-likelihood of the data
   switch(mDV.GetRVType()) 
   {
       case rv_aggregate:
-        if(by_row)
-          return ObjectiveFunction_Aggregate(coefs, by_row);
-        else
-          return LL + ObjectiveFunction_Aggregate(coefs, by_row);
+        if(by_row) return      ObjectiveFunction_Aggregate(coefs, by_row, gradient);
+        else       return LL + ObjectiveFunction_Aggregate(coefs, by_row, gradient);
         break;
         
       case rv_binary:
-        if(by_row)
-          return ObjectiveFunction_Binary(coefs, by_row, tolerate_imprecisions);
-        else
-          return LL + ObjectiveFunction_Binary(coefs, by_row, tolerate_imprecisions);
+        if(by_row) return      ObjectiveFunction_Binary(coefs, by_row, tolerate_imprecisions, gradient);
+        else       return LL + ObjectiveFunction_Binary(coefs, by_row, tolerate_imprecisions, gradient);
         break;
         
       case rv_dprime:
