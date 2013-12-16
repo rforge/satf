@@ -12,7 +12,7 @@ using namespace Rcpp;
 #include "satf.h"
 #include "satf_math.h"
 
-
+bool log_undefined_values = false;
 
 #define debug_level 10
 
@@ -181,7 +181,7 @@ double CDesignMatrix::GetParameter(Parameter parameter, CCoefs& coefs, int datap
        if(cur_coef == 0.0)
           continue;
        double contrast = mDM(datapoint_index, idx);
-       _dbg((0, "mDM(%d, %d) = %f", datapoint_index, idx, contrast));
+       _dbg((0, "mDM(%d, %d)*%f = %f", datapoint_index, idx, contrast));
        param += cur_coef*contrast;
     }
     return(param);
@@ -191,9 +191,9 @@ double CDesignMatrix::ComputeDprime(CCoefs& coefs, int datapoint_index, double t
 {
   _dbg_method("ComputeDprime", 1);
   double asymptote = GetParameter(parameter_satf_asymptote, coefs, datapoint_index);
-  if(asymptote == 0.0)
+  if(!log && asymptote == 0.0)
     return 0.0;
-  if(isnan(asymptote))
+  if(!log && isnan(asymptote))
     return asymptote;
   double invrate   = GetParameter(parameter_satf_invrate,  coefs, datapoint_index);
   double intercept = GetParameter(parameter_satf_intercept, coefs, datapoint_index);
@@ -469,7 +469,7 @@ double CCoefs::TransformFn(double raw_coef, double lower, double upper, Function
 
       case FnConstrain:
       case FnUnconstrain:
-        return raw_coef;
+        return lower;
     };
   
   } else if(lower == R_NegInf && upper == R_PosInf) {
@@ -613,7 +613,6 @@ bool CCoefConstraints::SetCoefValue(std::string name, double value) {
     if(coef_idx == -1)
       return false;
 
-//printf("setting %s to %.2f\n", name.c_str(), value);
     mCoefsLower[coef_idx] = value;
     mCoefsUpper[coef_idx] = value;
     return true;
@@ -624,7 +623,6 @@ bool CCoefConstraints::ResetCoefValue(std::string name) {
     if(coef_idx == -1)
       return false;
 
-//printf("resetting %s to [%.2f, %.2f]\n", name.c_str(),  mCoefsLowerOriginal[coef_idx], mCoefsUpperOriginal[coef_idx]);
     mCoefsLower[coef_idx] = mCoefsLowerOriginal[coef_idx];
     mCoefsUpper[coef_idx] = mCoefsUpperOriginal[coef_idx];
     return true;
@@ -729,7 +727,8 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(CCoefs& coefs, bool by_row, boo
     if( mDM.HasParameter( CDesignMatrix::parameter_corr_mrsat ) ) {
       corr_mrsat = mDM.GetParameter(CDesignMatrix::parameter_corr_mrsat, coefs, idx);
       if( isnan(corr_mrsat) ) {
-          printf("SATF WARNING: corr_mrsat is NaN.\n");
+          if(log_undefined_values)
+            printf("SATF WARNING: corr_mrsat is NaN.\n");
           save_LL(LLVector, R_NaN, by_row);
           return false;
       }
@@ -739,8 +738,10 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(CCoefs& coefs, bool by_row, boo
     double dprime = mDM.ComputeDprime(coefs, idx, mTime[idx]);
 
     if( !valid_dprime(dprime, LLVector, by_row) ) {
-      mDM.ComputeCriterion(coefs, idx, mTime[idx], true);
-      mDM.ComputeDprime(coefs, idx, mTime[idx], true);
+      if(log_undefined_values) {
+        mDM.ComputeCriterion(coefs, idx, mTime[idx], true);
+        mDM.ComputeDprime(coefs, idx, mTime[idx], true);
+      }
       return LLVector;
     }
     
@@ -769,11 +770,13 @@ DoubleVector CSATFData::ObjectiveFunction_Binary(CCoefs& coefs, bool by_row, boo
       _dbg((0, "corr.mrsat <%f>, crit_minus_psi <%.3f>, last_crit_minus_psi <%.3f>", corr_mrsat, crit_minus_psi, last_crit_minus_psi));
 
       if( !valid_probability(pNo, LLVector, by_row) ) {
-        printf("coefs <%f, %f, %f, %f>\n", coefs[3], coefs[4], coefs[5], coefs[6]);
-        mDM.ComputeCriterion(coefs, idx, mTime[idx], true);
-        mDM.ComputeDprime(coefs, idx, mTime[idx], true);
-        printf("<%f, %f, %f, %f>\n", criterion, dprime, last_criterion, last_dprime);
-        printf("corr.mrsat <%f>, crit_minus_psi <%.3f>, last_crit_minus_psi <%.3f>\n", corr_mrsat, crit_minus_psi, last_crit_minus_psi);
+        if(log_undefined_values) {
+          printf("coefs <%f, %f, %f, %f>\n", coefs[3], coefs[4], coefs[5], coefs[6]);
+          mDM.ComputeCriterion(coefs, idx, mTime[idx], true);
+          mDM.ComputeDprime(coefs, idx, mTime[idx], true);
+          printf("<%f, %f, %f, %f>\n", criterion, dprime, last_criterion, last_dprime);
+          printf("corr.mrsat <%f>, crit_minus_psi <%.3f>, last_crit_minus_psi <%.3f>\n", corr_mrsat, crit_minus_psi, last_crit_minus_psi);
+        }
         return LLVector;
       }
       

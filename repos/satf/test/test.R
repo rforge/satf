@@ -30,15 +30,15 @@ source("~/CodeSATF/test/satf_load.R")
 #data.nyes.cur <- data.nyes
 #print(data.nyes.cur)
 #save(data, file="/tmp/xxx.rda")
-(load("/tmp/xxx.rda"))
+#(load("/tmp/xxx.rda"))
 
 
 date()
 (m.raw <- satf(dv=c(response=~response), signal=~signal,
                start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
                contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
-               bias = ~1+c2, constraints=list(), time=~time, #trial.id=~trial.id,
-               data=data, metric="logLikRaw", method="BFGS", debug=F, stepwise=T))
+               bias = ~1+c2, constraints=list(), time=~time, trial.id=~trial.id,
+               data=data, metric="logLikRaw", method="BFGS", debug=T, stepwise=T))
 date()
 
 

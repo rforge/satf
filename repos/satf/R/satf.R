@@ -94,33 +94,44 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   #print( compareDerivatives(f=rcpp_compute_logLikFn, grad=compute_logLikFn_gradient, t0=start) )
   #stop()
 
-  fnLogLik = compute_logLikFn
-  fnLogLikGradient = NULL
-  if('corr.mrsat' %in% names(start)) {
-    if( is.null(method) )
-      method = "Nelder-Mead"
-  } else {
-    fnLogLikGradient = compute_logLikFn_gradient
-    if( is.null(method) )
-      method = "BFGS"
-  }
-
-  optimize_subset <- function(selection, variable, start)
+  optimize_subset <- function(selection, variable, method, start)
   {
+    # select the required data subset
     if(length(selection) > 0) {
       rcpp_select_subset_by_zero_dm_columns_all( selection )
     }
     
+    # extract start values if necessary
     original.start = start
     if(!is.vector(start))
       start = coef(start)
     
+    # determine which variables should vary, and which are fixed
     variable.coefnames = setdiff(variable, coefs$fixed.coefs)
     fixed.coefnames = setdiff(names(start), variable.coefnames)
     fixed = names(start) %in% fixed.coefnames
 
-    if(all(fixed))
+    # if all are fixed, return the original coefs
+    if( all(fixed) )
       return(original.start)
+    
+    # set gradient, etc.
+    # transform the parameters into their proper (constrained) form
+    fnLogLik = compute_logLikFn
+    fnLogLikGradient = NULL
+    
+    start.constrained <- rcpp_constrain_coefs( start )
+    corr.mrsat.nonzero = ( 'corr.mrsat' %in% names(start) ) && !( 'corr.mrsat' %in% fixed.coefnames && start.constrained['corr.mrsat'] == 0 )
+    if(corr.mrsat.nonzero) {
+      # print('corr.mrsat.nonzero is TRUE')
+      method = "Nelder-Mead"
+      
+    } else {
+      # print('corr.mrsat.nonzero is FALSE')
+      fnLogLikGradient = compute_logLikFn_gradient
+      if( is.null(method) )
+        method = "BFGS"
+    }
     
     res = maxLik(logLik=fnLogLik, grad=compute_logLikFn_gradient, start=start, fixed=fixed, iterlim=10^6, method=method)
     if(debug) {
@@ -149,34 +160,41 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   }
   
   # optimizate parameters by subsets
-  if(stepwise) {
+  if(stepwise)
+  {
     log_step_n(1)
     # STEP A1: optimize over core criterion parameters, use noise trials for which all specified contrasts are zero
     selection = select_zero(TRUE, union(satf.coefnames.all, bias.coefnames.noncore))
-    res = optimize_subset(selection=selection, variable=bias.coefnames.core, start=start) 
+    free.variables = c(bias.coefnames.core, 'corr.mrsat')
+    res = optimize_subset(selection=selection, variable=free.variables, method=method, start=start) 
 
     log_step_n(2)
     # STEP A2: optimize over non-core criterion parameters, use noise trials for which all specified contrasts are non-zero
     selection = c(select_zero(TRUE, satf.coefnames.all), select_zero(FALSE, bias.coefnames.noncore))
-    res = optimize_subset(selection=selection, variable=bias.coefnames.noncore, start=res)
+    free.variables = bias.coefnames.noncore
+    res = optimize_subset(selection=selection, variable=free.variables, method=method, start=res)
   
     log_step_n(3)
     # STEP B1: optimize over core d' parameters, use signal trials for which all specified contrasts are zero
     selection = c( select_zero(TRUE, satf.coefnames.noncore) ) # c(select_zero(FALSE, satf.coefnames.core), select_zero(TRUE, satf.coefnames.noncore))
-    res = optimize_subset(selection=selection, variable=satf.coefnames.core, start=res) 
+    free.variables = satf.coefnames.core
+    res = optimize_subset(selection=selection, variable=free.variables, method=method, start=res)
 
     log_step_n(4)
     # STEP B2: optimize over non-core d' parameters, use signal trials for which all specified contrasts are non-zero
     selection = c() #c(select_zero(FALSE, satf.coefnames.core), select_zero(FALSE, satf.coefnames.noncore))
-    res = optimize_subset(selection=selection, variable=satf.coefnames.noncore, start=res) 
-
-#    log_step_n(5)
-#    # STEP C1: optimize over all parameters, use all data
-#    res = optimize_subset(selection=c(), variable=c(satf.coefnames.all, bias.coefnames.all, 'corr.mrsat'), start=res)
+    free.variables = satf.coefnames.noncore
+    res = optimize_subset(selection=selection, variable=free.variables, method=method, start=res) 
+      
+    log_step_n(5)
+    # STEP C1: optimize over all parameters, use all data
+    free.variables = c(satf.coefnames.all, bias.coefnames.all, 'corr.mrsat')
+    res = optimize_subset(selection=c(), variable=free.variables, method=method, start=res)
     
   } else {
     # optimize over all parameters, use all data
-    res = optimize_subset(selection=c(), variable=c(satf.coefnames.all, bias.coefnames.all, 'corr.mrsat'), start=start) 
+    free.variables = c(satf.coefnames.all, bias.coefnames.all, 'corr.mrsat')
+    res = optimize_subset(selection=c(), variable=free.variables, start=start, method=method) 
     
   }
   
