@@ -5,7 +5,7 @@ source("~/CodeSATF/test/satf_load.R")
   fn.bias <- function(t) t*0 # SATF(t, asymptote=1, invrate=1, intercept=.4)
   fn.satf1 <- function(t) SATF(t, asymptote=3, invrate=1, intercept=.4)
   fn.satf2 <- function(t) SATF(t, asymptote=2, invrate=1, intercept=.4)
-  sim.n <- 10^3
+  sim.n <- 10^2
   time = seq(-.5,5,.5)
   data1 <- satf_generate(criterion=fn.bias, dprime=fn.satf1, time=time, n=sim.n, rho=.72, label="condition1")
   data2 <- satf_generate(criterion=fn.bias, dprime=fn.satf2, time=time, n=sim.n, rho=.72, label="condition2")
@@ -38,7 +38,7 @@ date()
                start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
                contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
                bias = ~1+c2, constraints=list(), time=~time, trial.id=~trial.id,
-               data=data, metric="logLikRaw", method="BFGS", debug=T, stepwise=T))
+               data=data, metric="logLikRaw"))
 date()
 
 

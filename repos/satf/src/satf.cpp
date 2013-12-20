@@ -12,13 +12,14 @@ using namespace Rcpp;
 #include "satf.h"
 #include "satf_math.h"
 
-bool log_undefined_values = false;
+bool log_undefined_values = true;
 
 #define debug_level 10
 
 _dbg_class_set(CCoefConstraints, "CCoefConstraints", 10);
-_dbg_class_set(CDependentVariable, "CDependentVariable", 0);
-_dbg_class_set(CDesignMatrix, "CDesignMatrix", 0);
+_dbg_class_set(CCoefs, "CCoefs", 10);
+_dbg_class_set(CDependentVariable, "CDependentVariable", 10);
+_dbg_class_set(CDesignMatrix, "CDesignMatrix", 10);
 _dbg_class_set(CSATFData, "CSATFData", 10);
 
 
@@ -193,6 +194,10 @@ double CDesignMatrix::ComputeDprime(CCoefs& coefs, int datapoint_index, double t
   double asymptote = GetParameter(parameter_satf_asymptote, coefs, datapoint_index);
   if(!log && asymptote == 0.0)
     return 0.0;
+  if(isnan(asymptote)) {
+	printf("coefs <%f, %f, %f>\n", coefs[0], coefs[1], coefs[2]);
+	printf("raw_coefs <%f, %f, %f>\n", coefs.unconstrained()[0], coefs.unconstrained()[1], coefs.unconstrained()[2]);
+  }
   if(!log && isnan(asymptote))
     return asymptote;
   double invrate   = GetParameter(parameter_satf_invrate,  coefs, datapoint_index);
@@ -684,7 +689,8 @@ inline void save_LL(DoubleVector& LLVector, double cur_LL, bool by_row) {
 
 inline bool valid_dprime(double dprime, DoubleVector& LLVector, bool by_row) {
     if( isnan(dprime) ) {
-        printf("SATF WARNING: dprime is undefined.\n");
+        if(log_undefined_values)
+          printf("SATF WARNING: dprime is undefined.\n");
         save_LL(LLVector, R_NaN, by_row);
         return false;
     }
@@ -693,7 +699,8 @@ inline bool valid_dprime(double dprime, DoubleVector& LLVector, bool by_row) {
 
 inline bool valid_probability(double probability, DoubleVector& LLVector, bool by_row) {
     if(probability < 0 || probability > 1 || isnan(probability)) {
-        printf("WARNING: approximation returned invalid probability: p_No = %f\n", probability);
+        if(log_undefined_values)
+          printf("WARNING: approximation returned invalid probability: p_No = %f\n", probability);
         save_LL(LLVector, R_NaN, by_row);
         return false;
     }

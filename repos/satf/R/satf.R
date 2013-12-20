@@ -25,7 +25,7 @@ compute_logLikFn_gradient <- function(coefs, by_row=FALSE, tolerate_imprecision=
 
 satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.id=NULL, 
                   constraints=list(), optim.control=list(), optim.digits=1, plot=FALSE,  
-                  likelihood.byrow=FALSE, method=NULL, stepwise=TRUE, debug=F, ...)
+                  likelihood.byrow=FALSE, method="Nelder-Mead", stepwise=TRUE, debug=F, ...)
 {
   metric.permissible <- c('RMSD','R2','adjR2','logLik','logLikRaw')
   reportifnot(metric %in% metric.permissible, sprintf("'metric' has to be one of: %s", paste(metric.permissible, collapse=", ")))
@@ -77,12 +77,20 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   # make sure the start values yield a valid likelihood
   res <- compute_logLikFn(start)
   if( is.na(res) ) {
+    if(likelihood.byrow) {
+   	res <- compute_logLikFn(start, TRUE, FALSE)
+    }
     rcpp_deinitialize_logLikFn()
-    stop("Got NA on first iteration. Adjust start parameters.")
+    warning("Got NA on first iteration. Adjust start parameters.")
+    return(res)
     
   } else if( is.infinite(res) ) {
+    if(likelihood.byrow) {
+   	res <- compute_logLikFn(start, TRUE, FALSE)
+    }
     rcpp_deinitialize_logLikFn()
-    stop("Got Inf or -Inf on first iteration. Adjust start parameters.")
+    warning("Got Inf or -Inf on first iteration. Adjust start parameters.")
+    return(res)
   }
 
   select_zero <- function(value, coefnames){

@@ -19,6 +19,8 @@ class DebugMethod {
       static int mIndentationLevel;
 };
 
+//#define DEBUG
+
 #ifdef DEBUG
   #define _dbg_class_init                   static const char* m_dbg_class; static const int m_dbg_level
   #define _dbg_class_set(class_name, name, dbg_level) const char* class_name::m_dbg_class = name; const int class_name::m_dbg_level = dbg_level

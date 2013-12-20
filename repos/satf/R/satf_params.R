@@ -112,8 +112,13 @@ init_coefs_and_constraints <- function(coefnames, start, constraints, coreparams
   {
     correction.fraction = .1
     # find the value closest to the old value within the boundaries (or to 0 is the old value was NA)
-    if( is.na(oldvalue) && constraint[1] < 0 && constraint[2] > 0)
-      return(0);
+    if( is.na(oldvalue)) {
+	if( constraint[1] <= 0 && constraint[2] >= 0) {
+		return(0);
+	} else {
+		return( mean(constraint) );
+}
+    }
 
     if( all(is.infinite(constraint)) ) {
       newvalue = 0
@@ -153,7 +158,7 @@ init_coefs_and_constraints <- function(coefnames, start, constraints, coreparams
       start.changed[[coefname]] = TRUE
     }
   }
-
+print(start)
   if( any( start.changed )) {
     start.changed = names(start.changed[start.changed])
     start.changed = paste0(start.changed, '=', start[start.changed],  collapse=", ")
@@ -286,7 +291,7 @@ set_start_defaults <- function(start, set.corr.mrsat=FALSE) {
 
 set_constraints_defaults <- function(constraints) {
   constraints = default(constraints, 'asymptote', c(0,5))
-  constraints = default(constraints, 'asymptote.*', c(-5,5))
+  #constraints = default(constraints, 'asymptote.*', c(-5,5))
   constraints = default(constraints, 'invrate', c(0,Inf))
   constraints = default(constraints, 'intercept', c(0,Inf))
   constraints = default(constraints, 'bias.invrate', c(0,Inf))

@@ -2,7 +2,6 @@
 #define __SATF_DATA_H__
 #include <Rcpp.h>
 
-// #define DEBUG
 #include "debug.h"
 
 
@@ -193,10 +192,12 @@ private:
     double TransformWithTwoBoundaries(double x, double lower, double upper, Function fn);
 
 private:
-  Rcpp::DoubleVector mUnconstrainedCoefs;
-  Rcpp::DoubleVector mConstrainedCoefs;
+    Rcpp::DoubleVector mUnconstrainedCoefs;
+    Rcpp::DoubleVector mConstrainedCoefs;
+  
+    CCoefConstraints* mConstraints;
 
-  CCoefConstraints* mConstraints;
+    _dbg_class_init;
 };
 
 inline Rcpp::DoubleVector CCoefs::constrained() {
