@@ -13,12 +13,16 @@
 namespace AlbersKallenberg1994 {
   
   // derivative of the normal distribution density function
-  inline double _ddnorm(double x, double mu=0.0, double sigma=1.0) {
+  inline double _ddnorm(double x, double mu, double sigma) {
     return -_dnorm(x, mu, sigma)*(x-mu)/pow(sigma,2);
   }
-  
+
+  inline double _ddnorm(double x) {
+    return -_dnorm(x)*x;
+  }
+
   inline double f_c(double a, double b, double rho) {
-    return (rho*a - b)/sqrt(1-pow(rho,2));
+    return (rho*a - b)/sqrt(1-(rho*rho));
   }
   inline double f_c1(double c) {
     return _dnorm(c) / _pnorm(-c);
@@ -42,16 +46,15 @@ namespace AlbersKallenberg1994 {
   inline double _pnorm2d(double a, double b, double rho, double theta, 
                          bool smaller, bool second_order)
   {
-      double c = AlbersKallenberg1994::f_c(a,b,rho);
-      double c1 = AlbersKallenberg1994::f_c1(c);
-
-      double res;
-      if(!check_constraints(a, b, rho))
+      if( !check_constraints(a, b, rho) )
           return(-1);
           
+      double res;
       if(smaller) res = _pnorm(b);
       else        res = (1-_pnorm(a));
           
+      double c = AlbersKallenberg1994::f_c(a,b,rho);
+      double c1 = AlbersKallenberg1994::f_c1(c);
       res = res - g(a, b, rho, c, c1, theta);
       if(second_order)
         return res - h(a, b, rho, c, c1, theta);
@@ -99,6 +102,7 @@ double pnorm_conditional(double rho, double crit_minus_psi, double last_crit_min
         static const double default_prob = 0.0001;
         if(p_below < 0 && p_below > -max_error) {
           p_below = default_prob;
+          
         } else if(p_below > 1 && p_below < 1+max_error) {
           p_below = 1-default_prob;
         }

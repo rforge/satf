@@ -158,7 +158,7 @@ init_coefs_and_constraints <- function(coefnames, start, constraints, coreparams
       start.changed[[coefname]] = TRUE
     }
   }
-print(start)
+
   if( any( start.changed )) {
     start.changed = names(start.changed[start.changed])
     start.changed = paste0(start.changed, '=', start[start.changed],  collapse=", ")

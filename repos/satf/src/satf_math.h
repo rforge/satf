@@ -21,7 +21,9 @@ inline double NAE(double t, double asymptote, double invrate, double intercept) 
     return 0.0;
   else if(t <= intercept)
     return 0.0;
-  else 
+  else if(invrate <= 0)
+    return nan("");
+  else
     return asymptote*(1-exp(-(1/invrate)*(t-intercept)));
 }
 
@@ -29,5 +31,43 @@ inline double NAE(double t, double asymptote, double invrate, double intercept) 
 inline double SNAE(double time, double max, double invrate, double intercept, double min) {
 	return NAE(time, max-min, invrate, intercept) + min;
 }
+
+
+class SNAEPoint {
+public:
+  inline SNAEPoint() {
+    reset();
+  }
+  
+  inline SNAEPoint(double t, double fasymptote, double finvrate, double fintercept, double fmin=0.0) {
+    time = t;
+    asymptote = fasymptote;
+    invrate = finvrate;
+    intercept = fintercept;
+    min = fmin;
+    if(asymptote == fmin)
+      value = fmin;
+    else
+      value = SNAE(time, asymptote, invrate, intercept, min);
+  }
+  
+  inline void reset() {
+    time = nan("");
+    asymptote = nan("");
+    min = nan("");
+    invrate = nan("");
+    intercept = nan("");
+    value = nan("");
+  }
+  
+public:
+  double time;
+  double asymptote;
+  double min;
+  double invrate;
+  double intercept;
+  double value;
+};
+
 
 #endif // __MATH_AUX_H__

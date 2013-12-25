@@ -5,10 +5,10 @@ source("~/CodeSATF/test/satf_load.R")
   fn.bias <- function(t) t*0 # SATF(t, asymptote=1, invrate=1, intercept=.4)
   fn.satf1 <- function(t) SATF(t, asymptote=3, invrate=1, intercept=.4)
   fn.satf2 <- function(t) SATF(t, asymptote=2, invrate=1, intercept=.4)
-  sim.n <- 10^2
+  sim.n <- 36
   time = seq(-.5,5,.5)
-  data1 <- satf_generate(criterion=fn.bias, dprime=fn.satf1, time=time, n=sim.n, rho=.72, label="condition1")
-  data2 <- satf_generate(criterion=fn.bias, dprime=fn.satf2, time=time, n=sim.n, rho=.72, label="condition2")
+  data1 <- satf_generate(criterion=fn.bias, dprime=fn.satf1, time=time, n=sim.n, rho=.82, label="condition1")
+  data2 <- satf_generate(criterion=fn.bias, dprime=fn.satf2, time=time, n=sim.n, rho=.82, label="condition2")
   data <- rbind(data1, data2)
 
   data.nyes <- satf_aggregate_nyes(data, id=c('condition','interval'), time.id=c('interval'), signal='signal')
@@ -27,37 +27,44 @@ source("~/CodeSATF/test/satf_load.R")
 
 source("~/CodeSATF/test/satf_load.R")
 
-#data.nyes.cur <- data.nyes
-#print(data.nyes.cur)
-#save(data, file="/tmp/xxx.rda")
-#(load("/tmp/xxx.rda"))
-
 
 date()
+
 (m.raw <- satf(dv=c(response=~response), signal=~signal,
                start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
                contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
                bias = ~1+c2, constraints=list(), time=~time, trial.id=~trial.id,
-               data=data, metric="logLikRaw"))
+               data=data, metric="logLikRaw", debug=T))
+
 date()
 
+
+# start: LL=1970 / 30 sec
+# change 1: 30 sec
+# change 2: 30 sec
 
 stop()
 
 
+data.cur <- subset(data, condition=="condition1")
+data.cur <- subset(data.cur, trial.id %in% c(1,2000))
+
+source("~/CodeSATF/test/satf_load.R")
+
 
 (m.raw <- satf(dv=c(response=~response), signal=~signal,
-               start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
-               contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
-               bias = ~1+c2, constraints=list(), time=~time, #trial.id=~trial.id,
-               data=data, metric="logLikRaw"))
+               start     = c(asymptote=2, invrate=.92, intercept=.35, bias.min=0),
+               contrasts = c(asymptote=~1, invrate=~1, intercept=~1),
+               bias = ~1, constraints=list(), time=~time, #trial.id=~trial.id,
+               data=data.cur, metric="logLikRaw", debug=T))
+
 stop()
 
 
 (m.nyes <- satf(dv=c(n.responses.yes=~n.responses.yes, n.responses=~n.responses), signal=~signal,
                 start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
-                contrasts = c(asymptote=~1, invrate=~1, intercept=~1),
-                bias = ~1, constraints=list(), time=~time, data=data.nyes.cur, metric="logLik"))
+                contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+                bias = ~1, constraints=list(), time=~time, data=data.nyes, metric="logLikRaw", debug=T))
 
 
 

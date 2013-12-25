@@ -9,14 +9,14 @@ using namespace Rcpp;
 
 int global_dbg_level = 10;
 
-static CSATFData *zzz=NULL;
+static CDataContainer *zzz=NULL;
 
 // [[Rcpp::export]]
 LogicalVector rcpp_initialize_logLikFn(CharacterVector& dv, NumericMatrix& dm, IntegerVector& dm_ncoef, 
                                        NumericMatrix& constraints, DataFrame& data, CharacterVector& cnames)
 {	
   _dbg_function("rcpp_initialize_logLikFn", 1);
-    zzz = new CSATFData(dv, dm, dm_ncoef, constraints, data, cnames);
+    zzz = new CDataContainer(dv, dm, dm_ncoef, constraints, data, cnames);
   _dbg((0, "returning"));
     return Rcpp::wrap(true);
 }
@@ -36,8 +36,9 @@ DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs, bool by_row=false, bool 
   _dbg_function("rcpp_compute_logLikFn", 1);
   
   // DoubleVector gradients(coefs.size());
-  DoubleVector res = zzz->ObjectiveFunction(coefs, by_row, tolerate_imprecision, NULL);
+  DoubleVector res = zzz->ObjectiveFunction(coefs, by_row, tolerate_imprecision);
   // res.attr("gradient") = gradients;
+  // printf("LL %f\n", res[0]);
   _dbg((0, "returning"));
   return Rcpp::wrap( res );
 }
@@ -45,10 +46,9 @@ DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs, bool by_row=false, bool 
 // [[Rcpp::export]]
 DoubleVector rcpp_compute_logLikFn_gradient(DoubleVector& coefs, bool by_row=false, bool tolerate_imprecision=true) {
   _dbg_function("rcpp_compute_logLikFn_gradient", 1);
-  DoubleVector gradients(coefs.size());
-  DoubleVector LL = zzz->ObjectiveFunction(coefs, by_row, tolerate_imprecision, &gradients);
+  DoubleVector gradient = zzz->ObjectiveFunctionGradient(coefs, by_row, tolerate_imprecision);
   _dbg((0, "returning"));
-  return Rcpp::wrap(gradients);
+  return Rcpp::wrap(gradient);
 }
 
 // [[Rcpp::export]]
@@ -91,6 +91,12 @@ void rcpp_reset_selection( ) {
 }
 
 // [[Rcpp::export]]
+DoubleVector rcpp_return_selection( ) {
+  _dbg_function("rcpp_reset_selection", 1);
+  return Rcpp::wrap( zzz->mEnabled );
+}
+
+// [[Rcpp::export]]
 void rcpp_set_coef_values(DoubleVector& values) {
   _dbg_function("rcpp_set_coef_values", 1);
   zzz->SetCoefValues(values);
@@ -98,9 +104,9 @@ void rcpp_set_coef_values(DoubleVector& values) {
 }
 
 // [[Rcpp::export]]
-void rcpp_reset_coef_values( CharacterVector& names ) {
+void rcpp_reset_coef_ranges( CharacterVector& names ) {
   _dbg_function("rcpp_reset_coef_values", 1);
-   zzz->ResetCoefValues(names);
+   zzz->ResetCoefRanges(names);
   _dbg((0, "returning"));
 }
 
@@ -140,4 +146,8 @@ NumericVector rcpp_get_constraints_upper() {
   #include "satf.cpp"
   #include "satf_math.cpp"
   #include "debug.cpp"
+  #include "datapoint.cpp"
+  #include "design_matrix.cpp"
+  #include "coefs.cpp"
+  #include "data.cpp"
 #endif

@@ -55,7 +55,7 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   # initialize start parameters and create constraint matrix  
   coefs <- init_coefs_and_constraints(coefnames=colnames(dm$dm), start=start, constraints=constraints,
                                       coreparams=c(satf.coefnames.core, bias.coefnames.core))
-  
+
   # initialize the C++ optimization routine
   rcpp_initialize_logLikFn(params$dv, dm$dm, dm$dm.coef.cnt, coefs$constraints, data, params$cnames)
   start <- rcpp_unconstrain_coefs( coefs$start )
@@ -104,11 +104,6 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
 
   optimize_subset <- function(selection, variable, method, start)
   {
-    # select the required data subset
-    if(length(selection) > 0) {
-      rcpp_select_subset_by_zero_dm_columns_all( selection )
-    }
-    
     # extract start values if necessary
     original.start = start
     if(!is.vector(start))
@@ -141,15 +136,30 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
         method = "BFGS"
     }
     
-    res = maxLik(logLik=fnLogLik, grad=compute_logLikFn_gradient, start=start, fixed=fixed, iterlim=10^6, method=method)
-    if(debug) {
-      print(summary(res))
-      old.LL = compute_logLikFn( coefs=start, by_row=FALSE, tolerate_imprecision=TRUE)
-      new.LL = compute_logLikFn( coefs=coef(res), by_row=FALSE, tolerate_imprecision=TRUE)
-      print(sprintf("LL improved to %.2f (old LL = %.2f)", new.LL, old.LL))
-      print("---")
+    if(debug)
+      print.level=0
+    else
+      print.level=0
+
+    # select the required data subset
+    if(length(selection) > 0) {
+      rcpp_select_subset_by_zero_dm_columns_all( selection )
     }
     
+    res = maxLik(logLik=fnLogLik, grad=compute_logLikFn_gradient, start=start, fixed=fixed, iterlim=10^6, method=method, print.level=print.level)
+    if(debug) {
+      variable.coefnames <- variable.coefnames[variable.coefnames%in%names(start)]
+      print(sprintf("optimizing: %s", paste(variable.coefnames, collapse=', ') ))
+      print(sprintf("method: %s", method))
+      print(sprintf("code: %d", res$code))
+      print(sprintf("iterations: %d", res$iterations))
+      print("coefs")
+      print( rcpp_constrain_coefs( coef(res) ) )
+      old.LL = compute_logLikFn( coefs=start, by_row=FALSE, tolerate_imprecision=TRUE)
+      new.LL = compute_logLikFn( coefs=coef(res), by_row=FALSE, tolerate_imprecision=TRUE)
+      print(sprintf("LL improved by %.2f (old LL = %.2f, new LL = %.2f)", new.LL-old.LL, new.LL, old.LL))
+      print("---")
+    }
     rcpp_reset_selection()
     res
   }
