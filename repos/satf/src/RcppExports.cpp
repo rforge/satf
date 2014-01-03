@@ -40,8 +40,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // rcpp_compute_logLikFn
-DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs, bool by_row = false, bool tolerate_imprecision = true);
-RcppExport SEXP satf_rcpp_compute_logLikFn(SEXP coefsSEXP, SEXP by_rowSEXP, SEXP tolerate_imprecisionSEXP) {
+DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs, bool by_row = false, bool tolerate_imprecision = true, bool force_update = false);
+RcppExport SEXP satf_rcpp_compute_logLikFn(SEXP coefsSEXP, SEXP by_rowSEXP, SEXP tolerate_imprecisionSEXP, SEXP force_updateSEXP) {
 BEGIN_RCPP
     SEXP __sexp_result;
     {
@@ -49,7 +49,8 @@ BEGIN_RCPP
         Rcpp::traits::input_parameter< DoubleVector& >::type coefs(coefsSEXP );
         Rcpp::traits::input_parameter< bool >::type by_row(by_rowSEXP );
         Rcpp::traits::input_parameter< bool >::type tolerate_imprecision(tolerate_imprecisionSEXP );
-        DoubleVector __result = rcpp_compute_logLikFn(coefs, by_row, tolerate_imprecision);
+        Rcpp::traits::input_parameter< bool >::type force_update(force_updateSEXP );
+        DoubleVector __result = rcpp_compute_logLikFn(coefs, by_row, tolerate_imprecision, force_update);
         PROTECT(__sexp_result = Rcpp::wrap(__result));
     }
     UNPROTECT(1);
@@ -138,6 +139,20 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
+// rcpp_return_selection
+DoubleVector rcpp_return_selection();
+RcppExport SEXP satf_rcpp_return_selection() {
+BEGIN_RCPP
+    SEXP __sexp_result;
+    {
+        Rcpp::RNGScope __rngScope;
+        DoubleVector __result = rcpp_return_selection();
+        PROTECT(__sexp_result = Rcpp::wrap(__result));
+    }
+    UNPROTECT(1);
+    return __sexp_result;
+END_RCPP
+}
 // rcpp_set_coef_values
 void rcpp_set_coef_values(DoubleVector& values);
 RcppExport SEXP satf_rcpp_set_coef_values(SEXP valuesSEXP) {
@@ -150,14 +165,14 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
-// rcpp_reset_coef_values
-void rcpp_reset_coef_values(CharacterVector& names);
-RcppExport SEXP satf_rcpp_reset_coef_values(SEXP namesSEXP) {
+// rcpp_reset_coef_ranges
+void rcpp_reset_coef_ranges(CharacterVector& names);
+RcppExport SEXP satf_rcpp_reset_coef_ranges(SEXP namesSEXP) {
 BEGIN_RCPP
     {
         Rcpp::RNGScope __rngScope;
         Rcpp::traits::input_parameter< CharacterVector& >::type names(namesSEXP );
-        rcpp_reset_coef_values(names);
+        rcpp_reset_coef_ranges(names);
     }
     return R_NilValue;
 END_RCPP

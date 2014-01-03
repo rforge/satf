@@ -22,6 +22,15 @@ LogicalVector rcpp_initialize_logLikFn(CharacterVector& dv, NumericMatrix& dm, I
 }
 
 // [[Rcpp::export]]
+LogicalVector rcpp_update_constraints_logLikFn(NumericMatrix& constraints)
+{  
+  _dbg_function("rcpp_initialize_logLikFn", 1);
+  zzz->UpdateConstraints(constraints);
+  _dbg((0, "returning"));
+  return Rcpp::wrap(true);
+}
+
+// [[Rcpp::export]]
 LogicalVector rcpp_deinitialize_logLikFn() {
   _dbg_function("rcpp_deinitialize_logLikFn", 1);
   _dbg((0, "pointer <0x%x>", zzz));
@@ -32,13 +41,21 @@ LogicalVector rcpp_deinitialize_logLikFn() {
 }
 
 // [[Rcpp::export]]
-DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs, bool by_row=false, bool tolerate_imprecision=true) {
+LogicalVector rcpp_is_initialized_logLikFn() {
+  _dbg_function("rcpp_is_initialized_logLikFn", 1);
+  return Rcpp::wrap(zzz != NULL);
+}
+
+// [[Rcpp::export]]
+CharacterVector rcpp_get_coef_names() {
+  _dbg_function("rcpp_is_initialized_logLikFn", 1);
+  return Rcpp::wrap(zzz->CoefNames());
+}
+
+// [[Rcpp::export]]
+DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs, bool by_row=false, bool tolerate_imprecision=true, bool force_update=false) {
   _dbg_function("rcpp_compute_logLikFn", 1);
-  
-  // DoubleVector gradients(coefs.size());
-  DoubleVector res = zzz->ObjectiveFunction(coefs, by_row, tolerate_imprecision);
-  // res.attr("gradient") = gradients;
-  // printf("LL %f\n", res[0]);
+  DoubleVector res = zzz->ObjectiveFunction(coefs, by_row, tolerate_imprecision, force_update);
   _dbg((0, "returning"));
   return Rcpp::wrap( res );
 }
@@ -70,16 +87,9 @@ DoubleVector rcpp_unconstrain_coefs(DoubleVector& coefs) {
 }
 
 // [[Rcpp::export]]
-void rcpp_select_subset_by_zero_dm_columns_any(LogicalVector& zero_column) {
+void rcpp_select_subset_by_zero_dm_columns(LogicalVector& zero_column, bool all) {
   _dbg_function("rcpp_select_subset_by_zero_dm_columns_any", 1);
-  zzz->SelectSubset(zero_column, false);
-  _dbg((0, "returning"));
-}
-
-// [[Rcpp::export]]
-void rcpp_select_subset_by_zero_dm_columns_all(LogicalVector& zero_column) {
-  _dbg_function("rcpp_select_subset_by_zero_dm_columns_any", 1);
-  zzz->SelectSubset(zero_column, true);
+  zzz->SelectSubset(zero_column, all);
   _dbg((0, "returning"));
 }
 
@@ -91,9 +101,13 @@ void rcpp_reset_selection( ) {
 }
 
 // [[Rcpp::export]]
-DoubleVector rcpp_return_selection( ) {
+IntegerVector rcpp_return_selection( ) {
   _dbg_function("rcpp_reset_selection", 1);
-  return Rcpp::wrap( zzz->mEnabled );
+  std::vector<int> selection = zzz->ReturnSelection();
+  // map to indices starting at 1, as used in R
+  for(size_t i=0; i < selection.size(); i++)
+    selection[i] = selection[i] + 1;
+  return Rcpp::wrap( selection );
 }
 
 // [[Rcpp::export]]
@@ -147,7 +161,7 @@ NumericVector rcpp_get_constraints_upper() {
   #include "satf_math.cpp"
   #include "debug.cpp"
   #include "datapoint.cpp"
-  #include "design_matrix.cpp"
+  #include "design_matrix_new.cpp"
   #include "coefs.cpp"
   #include "data.cpp"
 #endif

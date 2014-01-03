@@ -20,11 +20,11 @@ bool log_undefined_values = true;
 
 #define debug_level 10
 
-_dbg_class_set(CCoefConstraints, "CCoefConstraints", 10);
-_dbg_class_set(CCoefs, "CCoefs", 10);
-_dbg_class_set(CDependentVariable, "CDependentVariable", 10);
-_dbg_class_set(CDesignMatrix, "CDesignMatrix", 10);
-_dbg_class_set(CSATFData, "CSATFData", 10);
+_dbg_class_set(CCoefConstraints, "CCoefConstraints", 0);
+_dbg_class_set(CCoefs, "CCoefs", 0);
+_dbg_class_set(CDataPoint, "CDataPoint", 10);
+_dbg_class_set(CDesignMatrixRow, "CDesignMatrixRow", 10);
+_dbg_class_set(CDataContainer, "CDataContainer", 0);
 
 
 int getMilliCount(){

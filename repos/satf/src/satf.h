@@ -2,6 +2,7 @@
 #define __SATF_DATA_H__
 #include <Rcpp.h>
 
+//#define DEBUG
 #include "debug.h"
 #include "satf_math.h"
 
@@ -18,131 +19,85 @@ typedef enum EParameter {
   parameter_satf_asymptote = 0,
   parameter_satf_invrate  = 1,
   parameter_satf_intercept  = 2,
-  parameter_bias_min = 3,
-  parameter_bias_max  = 4,
-  parameter_bias_invrate  = 5,
-  parameter_bias_intercept  = 6,
+  parameter_bias_max  = 3,
+  parameter_bias_invrate  = 4,
+  parameter_bias_intercept  = 5,
+  parameter_bias_min = 6,
   parameter_corr_mrsat  = 7,
   parameter_invalid = 8
 } Parameter;
 
-class CDesignMatrix
+
+
+class CCoefConstraints;
+
+class CDesignMatrixRow
 {
   public:
-    CDesignMatrix(Rcpp::NumericMatrix& dm, Rcpp::IntegerVector& dm_ncoef);
-    ~CDesignMatrix();
-    
-    inline size_t nCoefs() { return mDM.ncol(); }
-    inline size_t nDatapoints() {return mDM.nrow(); }
-    
-    void DetermineZeroRows(Rcpp::LogicalVector& columns_zero, std::vector<bool>& row_selected, bool all);
-    
-    SNAEPoint ComputeDprime(CCoefs& coefs, int datapoint_index, double time, bool log=false);
-    SNAEPoint ComputeCriterion(CCoefs& coefs, int datapoint_index, double time, bool log=false);
+    CDesignMatrixRow(Rcpp::DoubleVector& elements, CCoefConstraints& coef_constraints);
 
-    double GetParameter(Parameter parameter, CCoefs& coefs, int datapoint_index);
-    bool HasParameter(Parameter parameter);
-    // std::vector<Parameter> GetParameterTypes();
+    bool UpdateParameters(CCoefs& coefs, bool force_update);
+    void AddDatapointIndex(int index) { mDatapointIndices.push_back(index); }
 
-    Parameter StringToParameter(std::string& name);
+    std::vector<int>& DatapointIndices() { return mDatapointIndices; }
+    std::vector<double>& CurrentParameters() { return mCurrentParameters; }
 
-    inline double operator()(int i, int j);
-    inline std::vector<int>& coef_types();
+    double operator[](int i)  { return mElements[i]; }
+    double operator==(CDesignMatrixRow& other) const;
+
+  private:
+    double ComputeParameter(CCoefs& coefs);
     
   private:
-    int FindColumnIndex(std::string& column_name);
-
-//  private:
-    public:
-    std::vector<std::string> mCoefNames;
-    std::vector<int> mCoefTypes;
-
-    std::vector<int> mCoefIndexFirst;
-    std::vector<int> mCoefIndexLast;
-
-    Rcpp::NumericMatrix mDM;
-
-    unsigned int mnCoefs;
-    unsigned int mnDatapoints;
+    Rcpp::DoubleVector mElements;
+    std::vector<int> mDatapointIndices;
+    std::vector<double> mCurrentParameters;
+    CCoefConstraints *mCoefConstraints;
 
     _dbg_class_init;
 };
 
-inline bool CDesignMatrix::HasParameter(Parameter parameter) {
-    if(mCoefIndexFirst[parameter] == -1)
-        return false;
-    return true;
-}
-
-inline double CDesignMatrix::operator()(int i, int j) {
-  return mDM(i, j);
-}
-
-inline std::vector<int>& CDesignMatrix::coef_types() {
-  return mCoefTypes;
-}
-
-
 class CDataPoint {
   public:
-    CDataPoint(int _n_responses_yes, int _n_responses, double _time, int _index, CDesignMatrix* dm);
+    CDataPoint(int _n_responses_yes, int _n_responses, double _time, 
+               int _index, CDataPoint* last_datapoint);
   
-    double ComputeLogLik(CCoefs& coefs);
-    double ComputeLogLik(CCoefs& coefs, double corr_mrsat, CDataPoint& last_datapoint, bool tolerate_imprecisions=false);
+    inline double LogLik() { return mLogLik; }
 
-    bool Update(CCoefs& coefs);
-    
-    void ResetDprime();
-    void ResetCriterion();
+//  Rcpp::DoubleVector ComputeLogLikGradient(CCoefs& coefs);
 
-    Rcpp::DoubleVector ComputeLogLikGradient(CCoefs& coefs);
-    
+    void UpdateParameters(CDesignMatrixRow& dm_row, bool tolerate_imprecisions=false);
+    void ResetParameters();
+
 private:
-    bool UpdateDprime(CCoefs& coefs);
-    bool UpdateCriterion(CCoefs& coefs);
+    void UpdateDprime(double satf_asymptote, double satf_invrate, double satf_intercept) {
+      dprime.Update(time, satf_asymptote, satf_invrate, satf_intercept);
+      relative_criterion = criterion.value - dprime.value;
+    }
+    // This is what Wickens (2001) calls lambda_center in equation (2.5) 
+    void ComputeCriterion(double bias_max, double bias_invrate, double bias_intercept, double bias_min)  {
+      criterion.Update(time, bias_max, bias_invrate, bias_intercept, bias_min);
+      relative_criterion = criterion.value - dprime.value;
+    }
+    void UpdateLogLik(double corr_mrsat, bool tolerate_imprecisions=false);
 
+    
 public:
-  SNAEPoint dprime;
-  SNAEPoint criterion;
-  int n_responses_yes;
-  int n_responses;  
-  double time;
-  int index;  
-  CDesignMatrix* mDM;
+    SNAEPoint dprime;
+    SNAEPoint criterion;
+    double relative_criterion;
+    double mLogLik;
+    
+    int n_responses_yes;
+    int n_responses;  
+    double time;
+    int index;
+    
+    CDataPoint* mLastDatapoint;
+
+    _dbg_class_init;
 };
 
-inline CDataPoint::CDataPoint(int _n_responses_yes, int _n_responses, double _time, int _index, CDesignMatrix* dm) {
-   n_responses_yes = _n_responses_yes;
-   n_responses = _n_responses;
-   time = _time;
-   index = _index;
-   mDM = dm;
-}
-
-
-inline bool CDataPoint::Update(CCoefs& coefs) {
-  if(!UpdateDprime(coefs))
-    return false;
-  if(!UpdateCriterion(coefs))
-    return false;
-  return true;
-}
-
-inline bool CDataPoint::UpdateDprime(CCoefs& coefs) {
-  dprime = mDM->ComputeDprime(coefs, index, time);
-  return !isnan(dprime.value);
-}
-inline bool CDataPoint::UpdateCriterion(CCoefs& coefs) {
-  criterion = mDM->ComputeCriterion(coefs, index, time);
-  return !isnan(criterion.value);
-}
-
-inline void CDataPoint::ResetDprime() {
-  dprime.reset();
-}
-inline void CDataPoint::ResetCriterion() {
-  criterion.reset();
-}
 
 
 class CCoefConstraints
@@ -150,21 +105,31 @@ class CCoefConstraints
   friend CCoefs;
 
   public:
-    CCoefConstraints(Rcpp::NumericMatrix& coef_constraints);
+    CCoefConstraints(Rcpp::NumericMatrix& coef_constraints, Rcpp::IntegerVector& dm_ncoef);
     ~CCoefConstraints();
-    
-    CCoefs Constrain(Rcpp::DoubleVector& coefs, bool use_names);
-    CCoefs Unconstrain(Rcpp::DoubleVector& coefs);
+
+    void UpdateConstraints(Rcpp::NumericMatrix& constraints);
 
     void SetCoefValues(Rcpp::DoubleVector& values);
     void ResetCoefRanges(Rcpp::CharacterVector& names);
 
-    bool IsCoefFixed(int coef_index);
+    bool IsCoefFixed(int coef_index) { return (mCoefsLower[coef_index] == mCoefsUpper[coef_index]); }
     int  FindCoefIndex(std::string& name);
-    
+
+    int CoefIndex(std::string& column_name);
+    bool HasParameter(Parameter parameter)  { return (mCoefIndexFirst[parameter] != -1); }
+    int ParameterCoefIndexMin(Parameter parameter) { return mCoefIndexFirst[parameter]; }
+    int ParameterCoefIndexMax(Parameter parameter) { return mCoefIndexLast[parameter]; }
+
+    std::vector<int>& CoefTypes() { return mCoefTypes; }
+    std::vector<std::string>& CoefNames() { return mCoefNames; }
+
   private:
     bool SetCoefValue(std::string name, double value);
     bool ResetCoefRange(std::string name);
+
+    Parameter StringToParameter(std::string& name);
+    const char* ParameterToString(Parameter parameter);
 
   protected:
   //private:
@@ -175,14 +140,13 @@ class CCoefConstraints
       Rcpp::DoubleVector mCoefsLowerOriginal;
       Rcpp::DoubleVector mCoefsUpperOriginal;
       
-      Rcpp::NumericMatrix mHyperparams;
+      std::vector<int> mCoefTypes;
+      std::vector<int> mCoefIndexFirst;
+      std::vector<int> mCoefIndexLast;
 
     _dbg_class_init;
 };
 
-inline bool CCoefConstraints::IsCoefFixed(int coef_index) {
-    return (mCoefsLower[coef_index] == mCoefsUpper[coef_index]);
-}
 
 
 class CCoefs {
@@ -194,18 +158,21 @@ class CCoefs {
     } Function;
 
 public:
-    CCoefs(Rcpp::DoubleVector& unconstrained_coefs, Function fn, 
-           bool use_names, CCoefConstraints* constraints);
-
-public:
-
-    double CoefsLL();
-
-    Rcpp::DoubleVector constrained();
-    Rcpp::DoubleVector unconstrained();
+    CCoefs();
+    CCoefs(Rcpp::DoubleVector& coefs, Function fn, 
+           bool use_names, CCoefConstraints& constraints,
+           CCoefs* oldcoefs=NULL);
 
     Rcpp::DoubleVector Constrain(Rcpp::DoubleVector& coefs, bool use_names);
     Rcpp::DoubleVector Unconstrain(Rcpp::DoubleVector& coefs);
+    
+    Rcpp::DoubleVector constrained() { return mConstrainedCoefs; }
+    Rcpp::DoubleVector unconstrained() { return mUnconstrainedCoefs; }
+
+    double ComputeParameter(Parameter parameter, CDesignMatrixRow& dm_row);
+    bool HasParameterChanged(Parameter parameter, CDesignMatrixRow& dm_row);
+    
+    bool HasParameter(Parameter parameter) { return mConstraints->HasParameter(parameter); }
 
     double TransformFn(int coef_index, Function fn);
 
@@ -220,21 +187,11 @@ private:
 private:
     Rcpp::DoubleVector mUnconstrainedCoefs;
     Rcpp::DoubleVector mConstrainedCoefs;
-  
+    std::vector<bool> mHasChanged;
     CCoefConstraints* mConstraints;
 
     _dbg_class_init;
 };
-
-inline Rcpp::DoubleVector CCoefs::constrained() {
-  return mConstrainedCoefs;
-}
-
-inline Rcpp::DoubleVector CCoefs::unconstrained() {
-  return mUnconstrainedCoefs;
-}
-
-
 
 class CDataContainer
 {
@@ -243,45 +200,50 @@ class CDataContainer
               Rcpp::IntegerVector& dm_ncoef, Rcpp::NumericMatrix& constraints, 
               Rcpp::DataFrame& data, Rcpp::CharacterVector& cnames);
     ~CDataContainer();
-    
+
+    void UpdateConstraints(Rcpp::NumericMatrix& constraints) { mCoefConstraints.UpdateConstraints(constraints); }
+
     Rcpp::DoubleVector ObjectiveFunction(Rcpp::DoubleVector& coefs, bool by_row=false, 
-                                         bool tolerate_imprecisions=false);
+                                         bool tolerate_imprecisions=false, bool force_update=false);
     Rcpp::DoubleVector ObjectiveFunctionGradient(Rcpp::DoubleVector& coefs,
                                          bool by_row=false, bool tolerate_imprecisions=false);
     
-    Rcpp::DoubleVector ConstrainCoefs(Rcpp::DoubleVector& coefs, bool use_names);
-    Rcpp::DoubleVector UnconstrainCoefs(Rcpp::DoubleVector& coefs);
+    Rcpp::DoubleVector ConstrainCoefs(Rcpp::DoubleVector& raw_coefs, bool use_names)  {
+      return CCoefs(raw_coefs, CCoefs::FnConstrain, use_names, mCoefConstraints).constrained();
+    }
+    Rcpp::DoubleVector UnconstrainCoefs(Rcpp::DoubleVector& raw_coefs)  {
+      return CCoefs(raw_coefs, CCoefs::FnUnconstrain, false, mCoefConstraints).unconstrained();
+    }
 
     void SelectSubset(Rcpp::LogicalVector& zero_columns, bool all);
     void ResetSubset();
+    std::vector<int> ReturnSelection();
+    
+    void SetCoefValues(Rcpp::DoubleVector& values)  { mCoefConstraints.SetCoefValues(values); }
+    void ResetCoefRanges(Rcpp::CharacterVector& names)  { mCoefConstraints.ResetCoefRanges(names); }
 
-    void SetCoefValues(Rcpp::DoubleVector& values);
-    void ResetCoefRanges(Rcpp::CharacterVector& names);
+    std::vector<std::string>& CoefNames() {return mCoefConstraints.CoefNames();}
+
+  private:
+    int  FindDMRow(CDesignMatrixRow& row);
+    void AddDMRow(Rcpp::DoubleVector& row, int datapoint_index);
+    
+    void DetermineZeroRows(Rcpp::LogicalVector& columns_zero, std::vector<bool>& row_selected, bool all);
 
 //  private:
   public:
-    CDesignMatrix mDM;
+    bool mForceUpdate;
+  
+    std::vector<CDesignMatrixRow> mUniqueDMRows;
     CCoefConstraints mCoefConstraints;
-    std::vector<CDataPoint> mDatapoints;
     std::vector<bool> mEnabled;
-    
+
+    CCoefs mLastCoefs;
+    std::vector<CDataPoint*> mDatapoints;
+    int mObjectiveFunctionCalls;
+
     _dbg_class_init;
 };
-
-inline void CDataContainer::SetCoefValues(Rcpp::DoubleVector& values) {
-   mCoefConstraints.SetCoefValues(values);
-}
-
-inline void CDataContainer::ResetCoefRanges(Rcpp::CharacterVector& names) {
-   mCoefConstraints.ResetCoefRanges(names);
-}
-
-inline Rcpp::DoubleVector CDataContainer::ConstrainCoefs(Rcpp::DoubleVector& coefs, bool use_names) {
-  return mCoefConstraints.Constrain(coefs, use_names).constrained();
-}
-inline Rcpp::DoubleVector CDataContainer::UnconstrainCoefs(Rcpp::DoubleVector& coefs) {
-  return mCoefConstraints.Unconstrain(coefs).unconstrained();
-}
 
 
 #endif // __SATF_DATA_H__

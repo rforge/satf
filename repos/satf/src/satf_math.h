@@ -4,8 +4,8 @@
 #include <Rcpp.h>
 #include <assert.h>
 
-double pnorm_conditional(double rho, double crit_minus_psi, double last_crit_minus_psi, 
-                         bool last_response_above_criterion, bool tolerate_imprecisions=true);
+double pnorm_conditional(double rho, double relative_criterion, double last_relative_criterion, 
+                         bool response_above_criterion, bool last_response_above_criterion, bool tolerate_imprecisions=true);
 double pnorm2d(double x_upper, double y_upper, double rho, double second_order=true);
 
 inline double logodds2p(double lodds) { return( exp(lodds)/(1+exp(lodds)) ); }
@@ -40,6 +40,10 @@ public:
   }
   
   inline SNAEPoint(double t, double fasymptote, double finvrate, double fintercept, double fmin=0.0) {
+    Update(t, fasymptote, finvrate, fintercept, fmin);
+  }
+  
+  inline void Update(double t, double fasymptote, double finvrate, double fintercept, double fmin=0.0) {
     time = t;
     asymptote = fasymptote;
     invrate = finvrate;
@@ -50,7 +54,6 @@ public:
     else
       value = SNAE(time, asymptote, invrate, intercept, min);
   }
-  
   inline void reset() {
     time = nan("");
     asymptote = nan("");

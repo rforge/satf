@@ -13,28 +13,29 @@
 namespace AlbersKallenberg1994 {
   
   // derivative of the normal distribution density function
-  inline double _ddnorm(double x, double mu, double sigma) {
-    return -_dnorm(x, mu, sigma)*(x-mu)/pow(sigma,2);
-  }
-
   inline double _ddnorm(double x) {
     return -_dnorm(x)*x;
   }
-
-  inline double f_c(double a, double b, double rho) {
-    return (rho*a - b)/sqrt(1-(rho*rho));
-  }
-  inline double f_c1(double c) {
-    return _dnorm(c) / _pnorm(-c);
-  }
   inline double f_theta(double rho) {
-    return( sqrt(1-pow(rho,2))/rho );
+    return( sqrt(1 - (rho*rho) )/rho );
   }
-  inline double g(double a, double b, double rho, double c, double c1, double theta) {
-    return( _pnorm(-c)*( _pnorm(a + theta*(c1 - c)) - _pnorm(a) ) ); 
-  }
-  inline double h(double a, double b, double rho, double c, double c1, double theta) {
-    return 0.5*pow(theta,2)*_pnorm(-c)*_ddnorm(a+theta*(c1-c))*(1+c*c1-pow(c1,2));
+
+  inline double _pnorm2d(double a, double b, double rho, bool smaller, bool second_order)
+  {
+      double theta = sqrt(1 - pow(rho,2)) / rho;
+      double c = (rho*a - b)/ sqrt(1-pow(rho,2));
+      double c1 = _dnorm(c) / _pnorm(-c);
+      double zeta = a + theta*(c1 - c);
+      double eta = _pnorm(-c);
+
+      double res;
+      if(smaller) res = _pnorm(b);
+      else        res = 1-_pnorm(a);
+      res = res - eta*( _pnorm( zeta ) - _pnorm(a) );
+
+      if(second_order)
+        res = res - 0.5*(theta*theta)*eta*_ddnorm( zeta )*( 1 + (c - c1)*c1 );
+      return res;
   }
 
   inline bool check_constraints(double a, double b, double rho) {
@@ -42,41 +43,23 @@ namespace AlbersKallenberg1994 {
       if( (rho*a-b) >= abs(rho*b - a)) return true;
       else                             return false;
   }
-
-  inline double _pnorm2d(double a, double b, double rho, double theta, 
-                         bool smaller, bool second_order)
-  {
-      if( !check_constraints(a, b, rho) )
-          return(-1);
-          
-      double res;
-      if(smaller) res = _pnorm(b);
-      else        res = (1-_pnorm(a));
-          
-      double c = AlbersKallenberg1994::f_c(a,b,rho);
-      double c1 = AlbersKallenberg1994::f_c1(c);
-      res = res - g(a, b, rho, c, c1, theta);
-      if(second_order)
-        return res - h(a, b, rho, c, c1, theta);
-      else
-        return res;
-  }
   
   inline double pnorm2d(double x_upper, double y_upper, double rho, bool second_order) {
-      double theta, res;
-      theta = AlbersKallenberg1994::f_theta(rho);
+      if( check_constraints(x_upper, y_upper, rho) ) {
+        return _pnorm2d(x_upper, y_upper, rho, true, second_order);
+      }
       
-      res = _pnorm2d(x_upper, y_upper, rho, theta, true, second_order);
-      if(res >= 0) return res;
-      
-      res = _pnorm2d(y_upper, x_upper, rho, theta, true, second_order);
-      if(res >= 0) return res;
+      if( check_constraints(y_upper, x_upper, rho) ){
+        return _pnorm2d(y_upper, x_upper, rho, true, second_order);
+      }
     
-      res = _pnorm2d(-x_upper, -y_upper, rho, theta, false, second_order);
-      if(res >= 0) return res;
+      if( check_constraints(-x_upper, -y_upper, rho) ) {
+        return _pnorm2d(-x_upper, -y_upper, rho, false, second_order);
+      }
     
-      res = _pnorm2d(-y_upper, -x_upper, rho, theta, false, second_order);
-      if(res >= 0) return res;
+      if( check_constraints(-y_upper, -x_upper, rho) ) {
+        return _pnorm2d(-y_upper, -x_upper, rho, false, second_order);
+      }
     
       return nan("");
   }
@@ -86,26 +69,48 @@ double pnorm2d(double x_upper, double y_upper, double rho, double second_order) 
     return AlbersKallenberg1994::pnorm2d(x_upper, y_upper, rho, second_order);
 }
 
-double pnorm_conditional(double rho, double crit_minus_psi, double last_crit_minus_psi, 
-                         bool last_response_above_criterion, bool tolerate_imprecisions)
+double pnorm_conditional(double rho, double relative_criterion, double last_relative_criterion, 
+                         bool response_above_criterion, bool last_response_above_criterion, bool tolerate_imprecisions)
 {
-    double p_below;
     if(last_response_above_criterion) {
-        p_below = 1-pnorm2d(-crit_minus_psi, -last_crit_minus_psi, rho)/_pnorm(-last_crit_minus_psi);
-        
-    } else {
-        p_below = pnorm2d(crit_minus_psi, last_crit_minus_psi, rho)/_pnorm(last_crit_minus_psi);
+      last_relative_criterion = -last_relative_criterion;
+      relative_criterion = -relative_criterion;
     }
+      
+    double p_last = _pnorm(last_relative_criterion, 0.0, 1.0, true, false);
+    double p_both = pnorm2d(relative_criterion, last_relative_criterion, rho, true);
 
-    if(tolerate_imprecisions) {
-        static const double max_error = 0.0005;
-        static const double default_prob = 0.0001;
-        if(p_below < 0 && p_below > -max_error) {
-          p_below = default_prob;
-          
-        } else if(p_below > 1 && p_below < 1+max_error) {
-          p_below = 1-default_prob;
-        }
-    }    
-    return p_below;
+    if(response_above_criterion == last_response_above_criterion) {
+//      printf("%f(p_both)/%f(p_last) = %f\n", p_both, p_last, p_both/p_last);
+      return log(p_both/p_last);
+    }
+//    printf("1 - %f(p_both)/%f(p_last) = %f\n", p_both, p_last, 1-p_both/p_last);
+    return log(1 - p_both/p_last);
 }
+
+/*
+
+P(X > x |Y > y) = P(X < -x |Y < -y)                     =     P(X < -x, Y < -y) / P(Y < -y)
+P(X < x |Y > y) = P(X > -x |Y < -y) = P(X > -x |Y < -y) = 1 - P(X < -x, Y < -y) / P(Y < -y)
+P(X > x |Y < y) = 1 - P(X < x |Y < y) = 1 - P(X < x, Y < y) / P(Y < y)
+P(X < x |Y < y)                       =     P(X < x, Y < y) / P(Y < y)
+
+
+
+*/
+
+/*
+  if( !valid_probability(pNo) ) {
+    if(log_undefined_values) {
+      printf("SATF WARNING: invalid conditional probability pNo=<%f>\n", pNo);
+      printf("criterion=%f, dprime=%f, last_criterion=%f, last_dprime=%f\n", 
+              criterion.value, dprime.value, last_datapoint.criterion.value, 
+              last_datapoint.dprime.value);
+      printf("corr.mrsat <%f>, relative_criterion <%.3f>, last_relative_criterion <%.3f>\n", corr_mrsat, relative_criterion, last_datapoint.relative_criterion);
+      printf("last_response <%d>\n", last_datapoint.n_responses_yes);
+    }
+    return nan("");
+  }
+     
+
+*/

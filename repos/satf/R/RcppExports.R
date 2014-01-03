@@ -9,8 +9,8 @@ rcpp_deinitialize_logLikFn <- function() {
     .Call('satf_rcpp_deinitialize_logLikFn', PACKAGE = 'satf')
 }
 
-rcpp_compute_logLikFn <- function(coefs, by_row = FALSE, tolerate_imprecision = TRUE) {
-    .Call('satf_rcpp_compute_logLikFn', PACKAGE = 'satf', coefs, by_row, tolerate_imprecision)
+rcpp_compute_logLikFn <- function(coefs, by_row = FALSE, tolerate_imprecision = TRUE, force_update = FALSE) {
+    .Call('satf_rcpp_compute_logLikFn', PACKAGE = 'satf', coefs, by_row, tolerate_imprecision, force_update)
 }
 
 rcpp_compute_logLikFn_gradient <- function(coefs, by_row = FALSE, tolerate_imprecision = TRUE) {
@@ -37,12 +37,16 @@ rcpp_reset_selection <- function() {
     invisible(.Call('satf_rcpp_reset_selection', PACKAGE = 'satf'))
 }
 
+rcpp_return_selection <- function() {
+    .Call('satf_rcpp_return_selection', PACKAGE = 'satf')
+}
+
 rcpp_set_coef_values <- function(values) {
     invisible(.Call('satf_rcpp_set_coef_values', PACKAGE = 'satf', values))
 }
 
-rcpp_reset_coef_values <- function(names) {
-    invisible(.Call('satf_rcpp_reset_coef_values', PACKAGE = 'satf', names))
+rcpp_reset_coef_ranges <- function(names) {
+    invisible(.Call('satf_rcpp_reset_coef_ranges', PACKAGE = 'satf', names))
 }
 
 rcpp_pnorm2d <- function(x_lower, y_lower, rho, second_order) {

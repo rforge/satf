@@ -4,11 +4,11 @@ source("~/CodeSATF/test/satf_load.R")
 
   fn.bias <- function(t) t*0 # SATF(t, asymptote=1, invrate=1, intercept=.4)
   fn.satf1 <- function(t) SATF(t, asymptote=3, invrate=1, intercept=.4)
-  fn.satf2 <- function(t) SATF(t, asymptote=2, invrate=1, intercept=.4)
-  sim.n <- 36
+  fn.satf2 <- function(t) SATF(t, asymptote=2, invrate=.5, intercept=0)
+  sim.n <- 10^2
   time = seq(-.5,5,.5)
-  data1 <- satf_generate(criterion=fn.bias, dprime=fn.satf1, time=time, n=sim.n, rho=.82, label="condition1")
-  data2 <- satf_generate(criterion=fn.bias, dprime=fn.satf2, time=time, n=sim.n, rho=.82, label="condition2")
+  data1 <- satf_generate(criterion=fn.bias, dprime=fn.satf1, time=time, n=sim.n, rho=.9, label="condition1")
+  data2 <- satf_generate(criterion=fn.bias, dprime=fn.satf2, time=time, n=sim.n, rho=.9, label="condition2")
   data <- rbind(data1, data2)
 
   data.nyes <- satf_aggregate_nyes(data, id=c('condition','interval'), time.id=c('interval'), signal='signal')
@@ -21,27 +21,166 @@ source("~/CodeSATF/test/satf_load.R")
   data.nyes$c1 <- ifelse(data.nyes$condition=="condition1", 1, 0)
   data.nyes$c2 <- ifelse(data.nyes$condition=="condition2", 1, 0)
 
-#  with(data.nyes, plot(time, criterion))
-#  with(data.dprime, plot(time, c + dprime/2, col=condition))
+date()
+start <- satf_gridsearch(dv=c(response=~response), signal=~signal,
+               start     = list(asymptote=c(0.5,1.5,3), invrate=c(0.5,1), intercept=c(.1,.8,2), 
+                                bias.min=c(-1,0,1), bias.max=c(-1,0,1), bias.invrate=1, bias.intercept=0,
+                                corr.mrsat=c(.8, .9)),
+               contrasts = c(asymptote=~1, invrate=~1, intercept=~1),
+               bias = ~1, constraints=list(), time=~time, trial.id=~trial.id,
+               data=data, metric="logLikRaw", debug=F, likelihood.byrow=F, stepwise=F)
+date()
+
+date()
+start.new <- satf_gridsearch(dv=c(response=~response), signal=~signal,
+                         start     = append(as.list(start), list(corr.mrsat=c(.75, .85, .95))),
+                         contrasts = c(asymptote=~1, invrate=~1, intercept=~1),
+                         bias = ~1, constraints=list(), time=~time, trial.id=~trial.id,
+                         data=data, metric="logLikRaw", debug=T, likelihood.byrow=F, stepwise=F)
+date()
+
+date()
+start <- satf_gridsearch(dv=c(response=~response), signal=~signal,
+                         start     = list(asymptote=c(0.5,1.5,3), invrate=c(.5,1,2), intercept=c(.1,.5,1,2), 
+                                          bias.min=c(-1,0,1), bias.max=c(-1,0,1), bias.invrate=1, bias.intercept=0),
+                         contrasts = c(asymptote=~1, invrate=~1, intercept=~1),
+                         bias = ~1, constraints=list(), time=~time,
+                         data=data, metric="logLikRaw", debug=T, likelihood.byrow=F, stepwise=F)
+date()
 
 
 source("~/CodeSATF/test/satf_load.R")
 
+date()
+(m.raw <- satf(dv=c(response=~response), signal=~signal,
+               start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+               contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+               bias = ~1+c2, constraints=list(), time=~time, trial.id=~trial.id,
+               data=data, metric="logLikRaw", debug=T, likelihood.byrow=F, optimize.stepwise=T))
+date()
+
 
 date()
+(data$LLI <- satf(dv=c(response=~response), signal=~signal,
+               start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+               contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+               bias = ~1+c2, constraints=list(corr.mrsat=.82), time=~time, trial.id=~trial.id,
+               data=data, metric="logLikRaw", debug=T, likelihood.byrow=T, optimize.stepwise=T))
+
+(data$LLD <- satf(dv=c(response=~response), signal=~signal,
+                  start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+                  contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+                  bias = ~1+c2, constraints=list(corr.mrsat=.82), time=~time, trial.id=~trial.id,
+                  data=data, metric="logLikRaw", debug=T, likelihood.byrow=T, optimize.stepwise=T))
+
+date()
+
+
+
+(m.estD <- satf(dv=c(response=~response), signal=~signal,
+                  start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+                  contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+                  bias = ~1+c2, 
+                  constraints=list(corr.mrsat=.82), time=~time, trial.id=~trial.id,
+                  data=data, metric="logLikRaw", debug=T, likelihood.byrow=F, optimize.stepwise=T))
+
+(m.estI <- satf(dv=c(response=~response), signal=~signal,
+                start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+                contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+                bias = ~1+c2, 
+                constraints=list(corr.mrsat=.82), time=~time, trial.id=~trial.id,
+                data=data, metric="logLikRaw", debug=T, likelihood.byrow=F, optimize.stepwise=T))
+
+
+
+head( subset(data, LLI!=LLD), 20 )
+
+head(data,20)
+
+
+date()
+(m.raw <- satf(dv=c(response=~response), signal=~signal,
+               start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+               contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+               bias = ~1+c2, constraints=list(), time=~time, trial.id=~trial.id,
+               data=data, metric="logLikRaw", debug=F, likelihood.byrow=F, stepwise=F))
+date()
+
+(m.nyes <- satf(dv=c(n.responses.yes=~n.responses.yes, n.responses=~n.responses), signal=~signal,
+                start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+                contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+                bias = ~1, constraints=list(), time=~time, data=data.nyes, metric="logLik", debug=F))
+
+
+stop()
+
+(m.raw <- satf(dv=c(response=~response), signal=~signal,
+               start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+               contrasts = c(asymptote=~1, invrate=~1, intercept=~1),
+               bias = ~1, constraints=list(), time=~time, trial.id=~trial.id,
+               data=data1, metric="logLikRaw", debug=T, likelihood.byrow=F))
+stop()
 
 (m.raw <- satf(dv=c(response=~response), signal=~signal,
                start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
                contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
                bias = ~1+c2, constraints=list(), time=~time, trial.id=~trial.id,
-               data=data, metric="logLikRaw", debug=T))
+               data=data, metric="logLikRaw", debug=T, likelihood.byrow=F))
+stop()
 
-date()
+
+data.cur = subset(data, signal!=0)
+
+data.cur$LL <- satf(dv=c(response=~response), signal=~signal,
+                    start     = c(asymptote=2, invrate=1, intercept=.4, corr.mrsat=.8, bias.min=0, bias.max=0),
+                    contrasts = c(asymptote=~1, invrate=~1, intercept=~1),
+                    bias = ~1, constraints=list(), time=~time, trial.id=~trial.id,
+                    data=data.cur, metric="logLikRaw", debug=T, likelihood.byrow=F)
+
+data.cur$p <- exp(data.cur$LL)
+data.cur
+
+stop()
+
+#  with(data.nyes, plot(time, criterion))
+#  with(data.dprime, plot(time, c + dprime/2, col=condition))
+
+source("~/CodeSATF/test/satf_load.R")
+
+data.cur = subset(data, trial.id == 1)
+#data.cur <- data.cur[1:2,]
+
+data.cur
+
+data.cur$response[2] <- FALSE
+
+data.cur$LL <- satf(dv=c(response=~response), signal=~signal,
+               start     = c(asymptote=2, invrate=1, intercept=.4, corr.mrsat=.95, bias.min=0, bias.max=0),
+               contrasts = c(asymptote=~1, invrate=~1, intercept=~1),
+               bias = ~1, constraints=list(), time=~time, trial.id=~trial.id,
+               data=data.cur, metric="logLikRaw", debug=T, likelihood.byrow=F)
+
+data.cur$p <- exp(data.cur$LL)
+data.cur
+
+tail(data,1000)
+
+tail(, 20)
+
+(m.raw <- satf(dv=c(response=~response), signal=~signal,
+               start     = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+               contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+               bias = ~1+c2, constraints=list(), time=~time, trial.id=~trial.id,
+               data=data, metric="logLikRaw", debug=T, likelihood.byrow=T))
+
+# everything: 28 sec
+# fixed coefs: 22 sec
 
 
-# start: LL=1970 / 30 sec
-# change 1: 30 sec
-# change 2: 30 sec
+# without update, without LL: 15 sec
+# with update, without LL: 50 sec
+# with update, with LL: 100 sec
+
 
 stop()
 
