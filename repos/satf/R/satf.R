@@ -49,9 +49,10 @@ select_columns_with_zero <- function(value, coefnames){
 }
 
 satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.id=NULL, 
-                  constraints=list(), method="Nelder-Mead", optimize.stepwise=TRUE, optimize.criterion.once=TRUE, 
-                  likelihood.byrow=FALSE, debug=F, .internal.init.optional=FALSE, .internal.cleanup=TRUE, 
-                  optim.control=list(), plot=FALSE, ...)
+                  constraints=list(),
+                  optimize.criterion.again=FALSE, optimize.corr.again=FALSE, 
+                  likelihood.byrow=FALSE, debug=F, method="Nelder-Mead",
+                  .internal.init.optional=FALSE, .internal.cleanup=TRUE)
 {
   metric.permissible <- c('RMSD','R2','adjR2','logLik','logLikRaw')
   reportifnot(metric %in% metric.permissible, sprintf("'metric' has to be one of: %s", paste(metric.permissible, collapse=", ")))
@@ -66,9 +67,9 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   satf.coefnames.core <- c('asymptote', 'invrate', 'intercept')
   bias.coefnames.core <- c('bias.max', 'bias.invrate', 'bias.intercept','bias.min')
   
-  # init default parameters for optimization
-  optim.control$fnscale <- -1
-  optim.control <- default(optim.control, 'maxit', 10^6)
+##  # init default parameters for optimization
+##  optim.control$fnscale <- -1
+##  optim.control <- default(optim.control, 'maxit', 10^6)
   
   # set defaults for start values and constraints
   start = set_start_defaults(start, set.corr.mrsat=!is.null(trial.id))
@@ -99,7 +100,6 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   } else {
     rcpp_update_constraints_logLikFn(coefs$constraints)
   }
-  
   
   start <- rcpp_unconstrain_coefs( coefs$start )
   names(start) <- names( coefs$start )
@@ -135,77 +135,61 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
     return(res)
   }
   
-  optimize_subset <- function(selection, variable, method, start, all=TRUE) {
+  optimize_subset <- function(variable, start, all=TRUE, selection=c()) {
     .optimize_subset(selection, variable, coefs$fixed.coefs, method, start, debug, data, all)
   }
   
-  # optimizate parameters by subsets
-  if(optimize.stepwise)
-  {
-    # TODO: Implement the following.
-    reportifnot(!.internal.init.optional, "The package does not support stepwise=T with .internal.init.optional=T. It's on my to-do list.")
-    satf.coefnames.all = dm$contrasts.coefs
-    bias.coefnames.all = dm$bias.coefs
-    satf.coefnames.noncore = setdiff(satf.coefnames.all, satf.coefnames.core)
-    bias.coefnames.noncore = setdiff(bias.coefnames.all, bias.coefnames.core)
-    
-    log_step_n = function(n) {
-      if(debug) {
-        print("-------------------")
-        print(sprintf("optimization step %d", n))
-        print("-------------------")
-      }
-    }
-    
-    # ignore correlation parameter for now, if specified
-    rcpp_set_coef_values( c(corr.mrsat=0) )
-    
-    log_step_n(1)
-    # STEP A1: optimize over core criterion parameters, use noise trials for which all specified contrasts are zero
-    selection = select_columns_with_zero(TRUE, union(satf.coefnames.all, bias.coefnames.noncore))
-    free.variables = bias.coefnames.core
-    res = optimize_subset(selection=selection, variable=free.variables, method=method, start=start) 
-
-    log_step_n(2)
-    # STEP A2: optimize over non-core criterion parameters, use all noise trials
-    selection = select_columns_with_zero(TRUE, satf.coefnames.all)
-    free.variables = bias.coefnames.noncore
-    res = optimize_subset(selection=selection, variable=free.variables, method=method, start=res)
+  # TODO: Implement the following.
+  reportifnot(!.internal.init.optional, "The package does not support stepwise=T with .internal.init.optional=T. It's on my to-do list.")
+  satf.coefnames.all = dm$contrasts.coefs
+  bias.coefnames.all = dm$bias.coefs
+  satf.coefnames.noncore = setdiff(satf.coefnames.all, satf.coefnames.core)
+  bias.coefnames.noncore = setdiff(bias.coefnames.all, bias.coefnames.core)
   
-    log_step_n(3)
-    # STEP B1: optimize over core d' parameters, use signal trials for which all specified contrasts are zero
-    selection = c(select_columns_with_zero(TRUE, satf.coefnames.noncore), select_columns_with_zero(TRUE, satf.coefnames.core) )
-    free.variables = satf.coefnames.core
-    res = optimize_subset(selection=selection, variable=free.variables, method=method, start=res, all=FALSE)
-
-    log_step_n(4)
-    # STEP B2: optimize over non-core d' parameters, use signal trials for which all specified contrasts are non-zero
-    selection = c()
-    free.variables = satf.coefnames.noncore
-    res = optimize_subset(selection=selection, variable=free.variables, method=method, start=res) 
-
-    # reset the specified range before estimating the correlation parameter
-    rcpp_reset_coef_ranges( c('corr.mrsat') )
-    
-    log_step_n(5)
-    # STEP C1:
-    selection = c()
-    free.variables = 'corr.mrsat'
-    res = optimize_subset(selection=selection, variable=free.variables, method=method, start=res) 
-
-    log_step_n(6)
-    # STEP C2:
-    selection = c()
-    free.variables = satf.coefnames.all #, 'corr.mrsat')
-    res = optimize_subset(selection=selection, variable=free.variables, method=method, start=res) 
-    
-  } else {
-    # optimize over all parameters, use all data
-    #free.variables = c(satf.coefnames.all, bias.coefnames.all, 'corr.mrsat')
-    res = optimize_subset(selection=c(), variable=names(start), start=start, method=method) 
-    
+  log_step_n = function(n) {
+    if(debug) {
+      print("-------------------")
+      print(sprintf("optimization step %d", n))
+      print("-------------------")
+    }
   }
   
+  # ignore correlation parameter for now, if specified
+  rcpp_set_coef_values( c(corr.mrsat=0) )
+  
+  # STEP A1: optimize over core criterion parameters, use noise trials for which all specified contrasts are zero
+  log_step_n(1)
+  selection = select_columns_with_zero(TRUE, union(satf.coefnames.all, bias.coefnames.noncore))
+  res = optimize_subset(variable=bias.coefnames.core, start=start, selection=selection) 
+
+  # STEP A2: optimize over non-core criterion parameters, use all noise trials
+  log_step_n(2)
+  selection = select_columns_with_zero(TRUE, satf.coefnames.all)
+  res = optimize_subset(variable=bias.coefnames.noncore, start=res, selection=selection)
+
+  # STEP B1: optimize over core d' parameters, use signal trials for which all specified contrasts are zero
+  log_step_n(3)
+  selection = c(select_columns_with_zero(TRUE, satf.coefnames.noncore), select_columns_with_zero(TRUE, satf.coefnames.core) )
+  res = optimize_subset(variable=satf.coefnames.core, start=res, all=FALSE, selection=selection)
+
+  # STEP B2: optimize over non-core d' parameters, use signal trials for which all specified contrasts are non-zero
+  log_step_n(4)
+  res = optimize_subset(variable=satf.coefnames.noncore, start=res) 
+
+  # reset the specified range before estimating the correlation parameter
+  rcpp_reset_coef_ranges( c('corr.mrsat') )
+  
+  # STEP C1:
+  log_step_n(5)
+  res = optimize_subset(variable='corr.mrsat', start=res) 
+
+  # STEP C2:
+  log_step_n(6)
+  free.variables = satf.coefnames.all
+  if(optimize.criterion.again) free.variables = c(free.variables, bias.coefnames.all)
+  if(optimize.corr.again)      free.variables = c(free.variables, 'corr.mrsat') 
+  res = optimize_subset(variable=free.variables, start=res) 
+    
   if(likelihood.byrow) {
     logLik <- compute_logLikFn(coefs=res, by_row=TRUE, tolerate_imprecision=TRUE)
     deinitialize_logLikFn()
@@ -214,15 +198,10 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
 
   # recompute the likelihood for the entire dataset (this time, do not tolerate approximation errors for extreme values in the C++ code)
   logLik <- compute_logLikFn( coefs=res, by_row=FALSE, tolerate_imprecision=TRUE)
-
-  # transform the parameters into their proper (constrained) form
-  estimates <- rcpp_constrain_coefs( res )
-
-  res <- list(estimates=estimates, LL=logLik)
+  res = list(estimates=rcpp_constrain_coefs(res), LL=logLik)
   
   # free all memory reserved by C++
   deinitialize_logLikFn()
-  
   return(res)
 }
 
@@ -270,10 +249,10 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
 
   n.free = sum(!fixed)
   if(n.free == 1) {
-    allparams <- start
-    fnLogLikTmp = function(p) { allparams[!fixed] = p; fnLogLik(allparams) }
+    res <- start
+    fnLogLikTmp = function(p) { res[!fixed] = p; fnLogLik(res) }
     res.optim = optimize(fnLogLikTmp, lower=-10, upper=10, maximum=TRUE)
-    res = allparams; res[!fixed] = res.optim$maximum
+    res[!fixed] = res.optim$maximum
     
   } else if(method == "Nelder-Mead") {
     res = maxLik(logLik=fnLogLik, grad=compute_logLikFn_gradient, start=start, fixed=fixed,

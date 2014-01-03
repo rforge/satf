@@ -7,19 +7,28 @@ source("~/CodeSATF/test/satf_load.R")
   fn.satf2 <- function(t) SATF(t, asymptote=2, invrate=.5, intercept=0)
   sim.n <- 10^2
   time = seq(-.5,5,.5)
-  data1 <- satf_generate(criterion=fn.bias, dprime=fn.satf1, time=time, n=sim.n, rho=.9, label="condition1")
-  data2 <- satf_generate(criterion=fn.bias, dprime=fn.satf2, time=time, n=sim.n, rho=.9, label="condition2")
+  data1 <- satf_generate(criterion=fn.bias, dprime=fn.satf1, time=time, n=sim.n, rho=.8, label="condition1")
+  data2 <- satf_generate(criterion=fn.bias, dprime=fn.satf2, time=time, n=sim.n, rho=.8, label="condition2")
   data <- rbind(data1, data2)
 
   data.nyes <- satf_aggregate_nyes(data, id=c('condition','interval'), time.id=c('interval'), signal='signal')
   data.dprime <- satf_aggregate_dprime(data.nyes, id=c('condition', 'interval'), signal='signal', 
                                        dv=c('n.responses.yes', 'n.responses'))
+data.dprime
 
   # data.nyes <- data.nyes[with(data.nyes, order(condition,signal, interval)),]
   data$c1 <- ifelse(data$condition=="condition1", 1, 0)
   data$c2 <- ifelse(data$condition=="condition2", 1, 0)
   data.nyes$c1 <- ifelse(data.nyes$condition=="condition1", 1, 0)
   data.nyes$c2 <- ifelse(data.nyes$condition=="condition2", 1, 0)
+
+(m.raw <- satf(dv=c(response=~response), signal=~signal, start = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
+               contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+               bias = ~1+c2, constraints=list(intercept.c2=.5), time=~time, trial.id=~trial.id,
+               data=data, metric="logLikRaw", debug=F))
+
+
+data.dprime
 
 date()
 start <- satf_gridsearch(dv=c(response=~response), signal=~signal,
@@ -59,6 +68,7 @@ date()
                data=data, metric="logLikRaw", debug=T, likelihood.byrow=F, optimize.stepwise=T))
 date()
 
+data.dprime
 
 date()
 (data$LLI <- satf(dv=c(response=~response), signal=~signal,
