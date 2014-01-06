@@ -25,6 +25,21 @@ BEGIN_RCPP
     return __sexp_result;
 END_RCPP
 }
+// rcpp_update_constraints_logLikFn
+LogicalVector rcpp_update_constraints_logLikFn(NumericMatrix& constraints);
+RcppExport SEXP satf_rcpp_update_constraints_logLikFn(SEXP constraintsSEXP) {
+BEGIN_RCPP
+    SEXP __sexp_result;
+    {
+        Rcpp::RNGScope __rngScope;
+        Rcpp::traits::input_parameter< NumericMatrix& >::type constraints(constraintsSEXP );
+        LogicalVector __result = rcpp_update_constraints_logLikFn(constraints);
+        PROTECT(__sexp_result = Rcpp::wrap(__result));
+    }
+    UNPROTECT(1);
+    return __sexp_result;
+END_RCPP
+}
 // rcpp_deinitialize_logLikFn
 LogicalVector rcpp_deinitialize_logLikFn();
 RcppExport SEXP satf_rcpp_deinitialize_logLikFn() {
@@ -33,6 +48,34 @@ BEGIN_RCPP
     {
         Rcpp::RNGScope __rngScope;
         LogicalVector __result = rcpp_deinitialize_logLikFn();
+        PROTECT(__sexp_result = Rcpp::wrap(__result));
+    }
+    UNPROTECT(1);
+    return __sexp_result;
+END_RCPP
+}
+// rcpp_is_initialized_logLikFn
+LogicalVector rcpp_is_initialized_logLikFn();
+RcppExport SEXP satf_rcpp_is_initialized_logLikFn() {
+BEGIN_RCPP
+    SEXP __sexp_result;
+    {
+        Rcpp::RNGScope __rngScope;
+        LogicalVector __result = rcpp_is_initialized_logLikFn();
+        PROTECT(__sexp_result = Rcpp::wrap(__result));
+    }
+    UNPROTECT(1);
+    return __sexp_result;
+END_RCPP
+}
+// rcpp_get_coef_names
+CharacterVector rcpp_get_coef_names();
+RcppExport SEXP satf_rcpp_get_coef_names() {
+BEGIN_RCPP
+    SEXP __sexp_result;
+    {
+        Rcpp::RNGScope __rngScope;
+        CharacterVector __result = rcpp_get_coef_names();
         PROTECT(__sexp_result = Rcpp::wrap(__result));
     }
     UNPROTECT(1);
@@ -104,28 +147,19 @@ BEGIN_RCPP
     return __sexp_result;
 END_RCPP
 }
-// rcpp_select_subset_by_zero_dm_columns_any
-void rcpp_select_subset_by_zero_dm_columns_any(LogicalVector& zero_column);
-RcppExport SEXP satf_rcpp_select_subset_by_zero_dm_columns_any(SEXP zero_columnSEXP) {
+// rcpp_select_coef_subset
+bool rcpp_select_coef_subset(Rcpp::CharacterVector& coefnames);
+RcppExport SEXP satf_rcpp_select_coef_subset(SEXP coefnamesSEXP) {
 BEGIN_RCPP
+    SEXP __sexp_result;
     {
         Rcpp::RNGScope __rngScope;
-        Rcpp::traits::input_parameter< LogicalVector& >::type zero_column(zero_columnSEXP );
-        rcpp_select_subset_by_zero_dm_columns_any(zero_column);
+        Rcpp::traits::input_parameter< Rcpp::CharacterVector& >::type coefnames(coefnamesSEXP );
+        bool __result = rcpp_select_coef_subset(coefnames);
+        PROTECT(__sexp_result = Rcpp::wrap(__result));
     }
-    return R_NilValue;
-END_RCPP
-}
-// rcpp_select_subset_by_zero_dm_columns_all
-void rcpp_select_subset_by_zero_dm_columns_all(LogicalVector& zero_column);
-RcppExport SEXP satf_rcpp_select_subset_by_zero_dm_columns_all(SEXP zero_columnSEXP) {
-BEGIN_RCPP
-    {
-        Rcpp::RNGScope __rngScope;
-        Rcpp::traits::input_parameter< LogicalVector& >::type zero_column(zero_columnSEXP );
-        rcpp_select_subset_by_zero_dm_columns_all(zero_column);
-    }
-    return R_NilValue;
+    UNPROTECT(1);
+    return __sexp_result;
 END_RCPP
 }
 // rcpp_reset_selection
@@ -140,13 +174,13 @@ BEGIN_RCPP
 END_RCPP
 }
 // rcpp_return_selection
-DoubleVector rcpp_return_selection();
+IntegerVector rcpp_return_selection();
 RcppExport SEXP satf_rcpp_return_selection() {
 BEGIN_RCPP
     SEXP __sexp_result;
     {
         Rcpp::RNGScope __rngScope;
-        DoubleVector __result = rcpp_return_selection();
+        IntegerVector __result = rcpp_return_selection();
         PROTECT(__sexp_result = Rcpp::wrap(__result));
     }
     UNPROTECT(1);

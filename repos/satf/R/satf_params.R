@@ -25,34 +25,36 @@ init_designmatrix <- function(data, contrasts, bias, cnames, satf.coefnames.core
     
   }
 
+# TODO: Create a list with different contrasts  
+  
   # rearange start parameters, make sure the coefficients for every parameter are contiguous, 
   # and create the design matrix
-  dm.colnames <- c();
-  contrasts.coef.names <- c(); 
-  # deal with satf params
-  for(cur.name in names(contrasts)) {
-    contrasts.coef.names <- c(contrasts.coef.names, cur.name)
-    dm.colnames <- c(dm.colnames, cnames['signal'])
-    if(length(contrasts[[cur.name]])) {
-      contrasts.coef.names <- c(contrasts.coef.names, paste(cur.name, contrasts[[cur.name]], sep='.'))  
-      dm.colnames <- c(dm.colnames, contrasts[[cur.name]])
-    }
-  }
-  dm.coef.cnt <- unlist(lapply(contrasts, length))+1
 
-  # deal with bias params
-  bias.coef.names <- c(); 
-  for(cur.name in names(bias)) {
-    bias.coef.names <- c(bias.coef.names, cur.name)
-    dm.colnames <- c(dm.colnames, '1')
-    if(length(bias[[cur.name]])){
-      bias.coef.names <- c(bias.coef.names, paste(cur.name, bias[[cur.name]], sep='.'))  
-      dm.colnames <- c(dm.colnames, bias[[cur.name]])
+  process_contrasts <- function(contrasts, default.colname) {
+    dm.colnames = c();
+    allparamnames = c();
+    paramnames = list();
+    for(paramname in names(contrasts)) {
+      allparamnames = c(allparamnames, paramname)
+      paramnames[['core']] = c(paramnames[['core']], paramname)
+      dm.colnames = c(dm.colnames, default.colname)
+      for(cur.colname in contrasts[[paramname]]) {
+        cur.paramname = paste(paramname, cur.colname, sep='.')
+        allparamnames = c(allparamnames, cur.paramname)
+        paramnames[[cur.colname]] = c(paramnames[[cur.colname]], cur.paramname)
+        dm.colnames = c(dm.colnames, cur.colname)
+      }
     }
+    list(paramnames=paramnames, allparamnames=allparamnames, dm.colnames=dm.colnames)
   }
-  dm.coef.cnt <- c(dm.coef.cnt, unlist(lapply(bias, length))+1)
-  coef.names <- c(contrasts.coef.names, bias.coef.names)
+  
+  params.dprime = process_contrasts(contrasts, cnames[['signal']])
+  params.criterion = process_contrasts(bias, '1')
+  dm.coef.cnt = c(unlist(lapply(contrasts, length))+1, unlist(lapply(bias, length))+1)
 
+  coef.names = c(params.dprime$allparamnames, params.criterion$allparamnames)
+  dm.colnames = c(params.dprime$dm.colnames, params.criterion$dm.colnames)
+  
   # create a column consisting of only 1's, for use with the bias
   data$'1' <- 1
   
@@ -78,7 +80,7 @@ init_designmatrix <- function(data, contrasts, bias, cnames, satf.coefnames.core
   }
   
   list(dm=as.matrix(dm), dm.coef.cnt=dm.coef.cnt, 
-    contrasts.coefs=contrasts.coef.names, bias.coefs=bias.coef.names)
+       params.dprime=params.dprime$paramnames, params.criterion=params.criterion$paramnames)
 }
 
 

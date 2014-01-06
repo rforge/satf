@@ -27,6 +27,15 @@ bool CDesignMatrixRow::UpdateParameters(CCoefs& coefs, bool force_update)
   return params_changed;
 }
 
+bool CDesignMatrixRow::CheckIfAnyCoefsUsed(std::vector<bool>& coefs) {
+  for(size_t i=0; i < coefs.size(); i++) {
+    if(coefs[i] && mElements[i] != 0.0)
+      return true;
+  }
+  return false;
+}
+
+
 double CDesignMatrixRow::operator==(CDesignMatrixRow& other) const
 { 
   if(mElements.size() != other.mElements.size())

@@ -5,8 +5,20 @@ rcpp_initialize_logLikFn <- function(dv, dm, dm_ncoef, constraints, data, cnames
     .Call('satf_rcpp_initialize_logLikFn', PACKAGE = 'satf', dv, dm, dm_ncoef, constraints, data, cnames)
 }
 
+rcpp_update_constraints_logLikFn <- function(constraints) {
+    .Call('satf_rcpp_update_constraints_logLikFn', PACKAGE = 'satf', constraints)
+}
+
 rcpp_deinitialize_logLikFn <- function() {
     .Call('satf_rcpp_deinitialize_logLikFn', PACKAGE = 'satf')
+}
+
+rcpp_is_initialized_logLikFn <- function() {
+    .Call('satf_rcpp_is_initialized_logLikFn', PACKAGE = 'satf')
+}
+
+rcpp_get_coef_names <- function() {
+    .Call('satf_rcpp_get_coef_names', PACKAGE = 'satf')
 }
 
 rcpp_compute_logLikFn <- function(coefs, by_row = FALSE, tolerate_imprecision = TRUE, force_update = FALSE) {
@@ -25,12 +37,8 @@ rcpp_unconstrain_coefs <- function(coefs) {
     .Call('satf_rcpp_unconstrain_coefs', PACKAGE = 'satf', coefs)
 }
 
-rcpp_select_subset_by_zero_dm_columns_any <- function(zero_column) {
-    invisible(.Call('satf_rcpp_select_subset_by_zero_dm_columns_any', PACKAGE = 'satf', zero_column))
-}
-
-rcpp_select_subset_by_zero_dm_columns_all <- function(zero_column) {
-    invisible(.Call('satf_rcpp_select_subset_by_zero_dm_columns_all', PACKAGE = 'satf', zero_column))
+rcpp_select_coef_subset <- function(coefnames) {
+    .Call('satf_rcpp_select_coef_subset', PACKAGE = 'satf', coefnames)
 }
 
 rcpp_reset_selection <- function() {

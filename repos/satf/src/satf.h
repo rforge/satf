@@ -42,6 +42,8 @@ class CDesignMatrixRow
     std::vector<int>& DatapointIndices() { return mDatapointIndices; }
     std::vector<double>& CurrentParameters() { return mCurrentParameters; }
 
+    bool CheckIfAnyCoefsUsed(std::vector<bool>& coefs_set);
+
     double operator[](int i)  { return mElements[i]; }
     double operator==(CDesignMatrixRow& other) const;
 
@@ -124,6 +126,8 @@ class CCoefConstraints
     std::vector<int>& CoefTypes() { return mCoefTypes; }
     std::vector<std::string>& CoefNames() { return mCoefNames; }
 
+    inline int size() { return mCoefNames.size(); } 
+
   private:
     bool SetCoefValue(std::string name, double value);
     bool ResetCoefRange(std::string name);
@@ -133,16 +137,16 @@ class CCoefConstraints
 
   protected:
   //private:
-      Rcpp::DoubleVector mCoefsLower;
-      Rcpp::DoubleVector mCoefsUpper;
-      std::vector<std::string> mCoefNames;
+    Rcpp::DoubleVector mCoefsLower;
+    Rcpp::DoubleVector mCoefsUpper;
+    std::vector<std::string> mCoefNames;
 
-      Rcpp::DoubleVector mCoefsLowerOriginal;
-      Rcpp::DoubleVector mCoefsUpperOriginal;
-      
-      std::vector<int> mCoefTypes;
-      std::vector<int> mCoefIndexFirst;
-      std::vector<int> mCoefIndexLast;
+    Rcpp::DoubleVector mCoefsLowerOriginal;
+    Rcpp::DoubleVector mCoefsUpperOriginal;
+    
+    std::vector<int> mCoefTypes;
+    std::vector<int> mCoefIndexFirst;
+    std::vector<int> mCoefIndexLast;
 
     _dbg_class_init;
 };
@@ -215,7 +219,7 @@ class CDataContainer
       return CCoefs(raw_coefs, CCoefs::FnUnconstrain, false, mCoefConstraints).unconstrained();
     }
 
-    void SelectSubset(Rcpp::LogicalVector& zero_columns, bool all);
+    bool SelectCoefSubset(Rcpp::CharacterVector& coefnames);
     void ResetSubset();
     std::vector<int> ReturnSelection();
     
@@ -227,8 +231,6 @@ class CDataContainer
   private:
     int  FindDMRow(CDesignMatrixRow& row);
     void AddDMRow(Rcpp::DoubleVector& row, int datapoint_index);
-    
-    void DetermineZeroRows(Rcpp::LogicalVector& columns_zero, std::vector<bool>& row_selected, bool all);
 
 //  private:
   public:

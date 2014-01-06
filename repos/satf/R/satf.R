@@ -42,15 +42,9 @@ satf_gridsearch <- function(start, constraints, ...) {
   start.vec[[which.max(logLik.vec)]]
 }
 
-select_columns_with_zero <- function(value, coefnames){
-  selection <- rep(value, length(coefnames))
-  names(selection) <- coefnames
-  selection
-}
-
 satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.id=NULL, 
                   constraints=list(),
-                  optimize.criterion.again=FALSE, optimize.corr.again=FALSE, 
+                  reoptimize.criterion=FALSE, reoptimize.corr=FALSE, 
                   likelihood.byrow=FALSE, debug=F, method="Nelder-Mead",
                   .internal.init.optional=FALSE, .internal.cleanup=TRUE)
 {
@@ -66,10 +60,6 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   
   satf.coefnames.core <- c('asymptote', 'invrate', 'intercept')
   bias.coefnames.core <- c('bias.max', 'bias.invrate', 'bias.intercept','bias.min')
-  
-##  # init default parameters for optimization
-##  optim.control$fnscale <- -1
-##  optim.control <- default(optim.control, 'maxit', 10^6)
   
   # set defaults for start values and constraints
   start = set_start_defaults(start, set.corr.mrsat=!is.null(trial.id))
@@ -89,63 +79,57 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   } else {
     coefnames <- rcpp_get_coef_names()
   }
-  
+
   # initialize start parameters and create constraint matrix  
   coefs <- init_coefs_and_constraints(coefnames=coefnames, start=start, constraints=constraints,
                                       coreparams=c(satf.coefnames.core, bias.coefnames.core))
-
   # initialize the C++ optimization routine
   if( !skip.initialization ) {
     rcpp_initialize_logLikFn(params$dv, dm$dm, dm$dm.coef.cnt, coefs$constraints, data, params$cnames)
   } else {
     rcpp_update_constraints_logLikFn(coefs$constraints)
   }
-  
+
   start <- rcpp_unconstrain_coefs( coefs$start )
   names(start) <- names( coefs$start )
 
   if(all(names(start) %in% coefs$fixed.coefs)) {
     if(likelihood.byrow) {
-      res <- compute_logLikFn(start, TRUE, TRUE)
+      logLik <- compute_logLikFn(start, TRUE, TRUE)
       deinitialize_logLikFn()
-      return( res )
+      return( logLik )
       
     } else {
-      res <- compute_logLikFn(start, FALSE, TRUE)
+      logLik <- compute_logLikFn(start, FALSE, TRUE)
       deinitialize_logLikFn()
-      return( res )
+      return( logLik )
     }
   }
 
   # make sure the start values yield a valid likelihood
-  res <- compute_logLikFn(start)
-
-  if( is.na(res) ) {
+  logLik = compute_logLikFn(start)
+  if( is.na(logLik) ) {
     if(likelihood.byrow)
      	res = compute_logLikFn(start, TRUE, FALSE)
     deinitialize_logLikFn()
     warning("Got NA on first iteration. Adjust start parameters.")
-    return(res)
+    return(logLik)
     
-  } else if( is.infinite(res) ) {
+  } else if( is.infinite(logLik) ) {
     if(likelihood.byrow)
-   	  res = compute_logLikFn(start, TRUE, FALSE)
+      logLik = compute_logLikFn(start, TRUE, FALSE)
     deinitialize_logLikFn()
     warning("Got Inf or -Inf on first iteration. Adjust start parameters.")
-    return(res)
+    return(logLik)
   }
-  
+
   optimize_subset <- function(variable, start, all=TRUE, selection=c()) {
-    .optimize_subset(selection, variable, coefs$fixed.coefs, method, start, debug, data, all)
+    .optimize_subset(variable, coefs$fixed.coefs, method, start, debug, data, selection)
   }
   
   # TODO: Implement the following.
   reportifnot(!.internal.init.optional, "The package does not support stepwise=T with .internal.init.optional=T. It's on my to-do list.")
-  satf.coefnames.all = dm$contrasts.coefs
-  bias.coefnames.all = dm$bias.coefs
-  satf.coefnames.noncore = setdiff(satf.coefnames.all, satf.coefnames.core)
-  bias.coefnames.noncore = setdiff(bias.coefnames.all, bias.coefnames.core)
-  
+
   log_step_n = function(n) {
     if(debug) {
       print("-------------------")
@@ -153,59 +137,44 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
       print("-------------------")
     }
   }
-  
+
   # ignore correlation parameter for now, if specified
   rcpp_set_coef_values( c(corr.mrsat=0) )
-  
-  # STEP A1: optimize over core criterion parameters, use noise trials for which all specified contrasts are zero
-  log_step_n(1)
-  selection = select_columns_with_zero(TRUE, union(satf.coefnames.all, bias.coefnames.noncore))
-  res = optimize_subset(variable=bias.coefnames.core, start=start, selection=selection) 
 
-  # STEP A2: optimize over non-core criterion parameters, use all noise trials
-  log_step_n(2)
-  selection = select_columns_with_zero(TRUE, satf.coefnames.all)
-  res = optimize_subset(variable=bias.coefnames.noncore, start=res, selection=selection)
+  coeforder = append(dm$params.criterion, dm$params.dprime)
 
-  # STEP B1: optimize over core d' parameters, use signal trials for which all specified contrasts are zero
-  log_step_n(3)
-  selection = c(select_columns_with_zero(TRUE, satf.coefnames.noncore), select_columns_with_zero(TRUE, satf.coefnames.core) )
-  res = optimize_subset(variable=satf.coefnames.core, start=res, all=FALSE, selection=selection)
+  # optimize in steps on subsets of the data
+  for(i in 1:length(coeforder)) {
+    log_step_n(i)
+    selection.variables = c(unlist(coeforder[1:i]),  'corr.mrsat' )
+    start = optimize_subset(variable=coeforder[[i]], start=start, selection=selection.variables) 
+  }
 
-  # STEP B2: optimize over non-core d' parameters, use signal trials for which all specified contrasts are non-zero
-  log_step_n(4)
-  res = optimize_subset(variable=satf.coefnames.noncore, start=res) 
+  # optimize over the correlation coefficient
+  log_step_n(i+1)
+  rcpp_reset_coef_ranges( 'corr.mrsat' )
+  start = optimize_subset(variable='corr.mrsat', start=start) 
 
-  # reset the specified range before estimating the correlation parameter
-  rcpp_reset_coef_ranges( c('corr.mrsat') )
-  
-  # STEP C1:
-  log_step_n(5)
-  res = optimize_subset(variable='corr.mrsat', start=res) 
-
-  # STEP C2:
-  log_step_n(6)
-  free.variables = satf.coefnames.all
-  if(optimize.criterion.again) free.variables = c(free.variables, bias.coefnames.all)
-  if(optimize.corr.again)      free.variables = c(free.variables, 'corr.mrsat') 
-  res = optimize_subset(variable=free.variables, start=res) 
-    
+  # reoptimize dprime or more parameters
+  log_step_n(i+2)
+  free.variables = unlist(dm$params.dprime)
+  if(reoptimize.criterion) free.variables = c(free.variables, unlist(dm$params.criterion))
+  if(reoptimize.corr)      free.variables = c(free.variables, 'corr.mrsat') 
+  estimates = optimize_subset(variable=free.variables, start=start) 
   if(likelihood.byrow) {
-    logLik <- compute_logLikFn(coefs=res, by_row=TRUE, tolerate_imprecision=TRUE)
+    logLik <- compute_logLikFn(coefs=estimates, by_row=TRUE, tolerate_imprecision=TRUE)
     deinitialize_logLikFn()
     return( logLik )
   } 
 
   # recompute the likelihood for the entire dataset (this time, do not tolerate approximation errors for extreme values in the C++ code)
-  logLik <- compute_logLikFn( coefs=res, by_row=FALSE, tolerate_imprecision=TRUE)
-  res = list(estimates=rcpp_constrain_coefs(res), LL=logLik)
-  
-  # free all memory reserved by C++
+  logLik <- compute_logLikFn( coefs= estimates, by_row=FALSE, tolerate_imprecision=TRUE)
+  res = list(estimates=rcpp_constrain_coefs(estimates), LL=logLik)
   deinitialize_logLikFn()
   return(res)
 }
 
-.optimize_subset <- function(selection, variable, fixed, method, start, debug, data, all)
+.optimize_subset <- function(variable, fixed, method, start, debug, data, selection)
 {
   # NOTE: 'fixed' overrides 'variable'
   # extract start values if necessary
@@ -244,19 +213,26 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   
   # select the required data subset
   if(length(selection) > 0) {
-    rcpp_select_subset_by_zero_dm_columns( selection, all )
+    rcpp_select_coef_subset( selection )
+#    print("--")
+#    print(selection)
+#    print(rcpp_return_selection( ))
+#    print(data[rcpp_return_selection( ),])
+#    print("--")
   }
 
   n.free = sum(!fixed)
   if(n.free == 1) {
     res <- start
-    fnLogLikTmp = function(p) { res[!fixed] = p; fnLogLik(res) }
-    res.optim = optimize(fnLogLikTmp, lower=-10, upper=10, maximum=TRUE)
+    fnLogLikTmp = function(p) {res[!fixed] = p; ll = fnLogLik(res); ifelse(ll == -Inf, -.Machine$double.xmax, ll);  }
+    res.optim = optimize(fnLogLikTmp, lower=-6, upper=6, maximum=TRUE)
     res[!fixed] = res.optim$maximum
     
   } else if(method == "Nelder-Mead") {
+    if(any(start==0.0)) parscale = rep(1, length(start))
+    else                parscale = abs(start)
     res = maxLik(logLik=fnLogLik, grad=compute_logLikFn_gradient, start=start, fixed=fixed,
-                 iterlim=10^6, method="Nelder-Mead", print.level=print.level)
+                 parscale=parscale, iterlim=10^6, method="Nelder-Mead", print.level=print.level)
     if(debug) {
       variable.coefnames <- variable.coefnames[variable.coefnames%in%names(start)]
       print(sprintf("optimizing: %s", paste(variable.coefnames, collapse=', ') ))

@@ -187,7 +187,7 @@ Rcpp::DoubleVector CDataContainer::ObjectiveFunctionGradient(DoubleVector& raw_c
       return invalid_gradient;
 }
 
-
+/*
 void CDataContainer::DetermineZeroRows(LogicalVector& zero_columns, std::vector<bool>& row_selected, bool all)
 {
     for(size_t i=0; i < row_selected.size(); i++) {
@@ -215,16 +215,41 @@ void CDataContainer::DetermineZeroRows(LogicalVector& zero_columns, std::vector<
       }
     }
 }
-   
-void CDataContainer::SelectSubset(LogicalVector& columns_zero, bool all) {
-  DetermineZeroRows(columns_zero, mEnabled, all);
+*/
+
+bool CDataContainer::SelectCoefSubset(Rcpp::CharacterVector& coefnames)
+{
+  // create a boolean vector in which all deselected coefficients are marked with true
+  std::vector<bool> deselected_coefs(mCoefConstraints.size(), true);
+  for(int i=0; i < coefnames.size(); i++) 
+  {
+    std::string cur_name = as<std::string>(coefnames[i]);
+    int index = mCoefConstraints.FindCoefIndex( cur_name );
+    if(index != -1)
+      deselected_coefs[index] = false;
+  }
+  
+  // disable all design matrix rows which use deselected coefficients
+  for(size_t i=0; i < mUniqueDMRows.size(); i++) {
+    if(mUniqueDMRows[i].CheckIfAnyCoefsUsed(deselected_coefs))
+      mEnabled[i] = false;
+    else
+      mEnabled[i] = true;
+  }
+  
+  // force update of dprime, criterion and log-likelihood
   mForceUpdate = true;
+  
+  return true;
 }
 
 void CDataContainer::ResetSubset()
 {
+  // enable all design matrix rows
   for(size_t i=0; i < mEnabled.size(); i++)
     mEnabled[i] = true;
+    
+  // force update of dprime, criterion and log-likelihood
   mForceUpdate = true;
 }
 

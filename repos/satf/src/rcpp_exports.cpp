@@ -87,10 +87,11 @@ DoubleVector rcpp_unconstrain_coefs(DoubleVector& coefs) {
 }
 
 // [[Rcpp::export]]
-void rcpp_select_subset_by_zero_dm_columns(LogicalVector& zero_column, bool all) {
-  _dbg_function("rcpp_select_subset_by_zero_dm_columns_any", 1);
-  zzz->SelectSubset(zero_column, all);
+bool rcpp_select_coef_subset(Rcpp::CharacterVector& coefnames) {
+  _dbg_function("rcpp_select_coef_subset", 1);
+  bool res = zzz->SelectCoefSubset(coefnames);
   _dbg((0, "returning"));
+  return Rcpp::wrap( res );
 }
 
 // [[Rcpp::export]]
@@ -156,7 +157,7 @@ NumericVector rcpp_get_constraints_upper() {
 }
 */
 
-#if 1
+#if 0
   #include "satf.cpp"
   #include "satf_math.cpp"
   #include "debug.cpp"
