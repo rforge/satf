@@ -166,7 +166,7 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
     deinitialize_logLikFn()
     return( logLik )
   } 
-
+  
   # recompute the likelihood for the entire dataset (this time, do not tolerate approximation errors for extreme values in the C++ code)
   logLik <- compute_logLikFn( coefs= estimates, by_row=FALSE, tolerate_imprecision=TRUE)
   res = list(estimates=rcpp_constrain_coefs(estimates), LL=logLik)
@@ -214,17 +214,19 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   # select the required data subset
   if(length(selection) > 0) {
     rcpp_select_coef_subset( selection )
-#    print("--")
-#    print(selection)
-#    print(rcpp_return_selection( ))
-#    print(data[rcpp_return_selection( ),])
-#    print("--")
+  }
+
+  if(debug) {
+    variable.coefnames <- variable.coefnames[variable.coefnames%in%names(start)]
+    print(sprintf("optimizing: %s", paste(variable.coefnames, collapse=', ') ))
   }
 
   n.free = sum(!fixed)
   if(n.free == 1) {
+    # TODO: This optimization routine produces warnings when the objective function returns NA. Fix this
+    # TODO: Reevaluate upper and lower boundary. -6 and 6 work for transformed parameters and for most untransformed parameters for now.
     res <- start
-    fnLogLikTmp = function(p) {res[!fixed] = p; ll = fnLogLik(res); ifelse(ll == -Inf, -.Machine$double.xmax, ll);  }
+    fnLogLikTmp = function(p) {res[!fixed] = p; ll = fnLogLik(res); ifelse(ll==-Inf || is.nan(ll), -.Machine$double.xmax, ll);  }
     res.optim = optimize(fnLogLikTmp, lower=-6, upper=6, maximum=TRUE)
     res[!fixed] = res.optim$maximum
     
@@ -234,8 +236,6 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
     res = maxLik(logLik=fnLogLik, grad=compute_logLikFn_gradient, start=start, fixed=fixed,
                  parscale=parscale, iterlim=10^6, method="Nelder-Mead", print.level=print.level)
     if(debug) {
-      variable.coefnames <- variable.coefnames[variable.coefnames%in%names(start)]
-      print(sprintf("optimizing: %s", paste(variable.coefnames, collapse=', ') ))
       print(sprintf("method: %s", method))
       print(sprintf("code: %d", res$code))
       print(sprintf("iterations: %d", res$iterations))    
@@ -244,7 +244,6 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
       old.LL = compute_logLikFn( coefs=start, by_row=FALSE, tolerate_imprecision=TRUE)
       new.LL = compute_logLikFn( coefs=coef(res), by_row=FALSE, tolerate_imprecision=TRUE)
       print(sprintf("LL improved by %.2f (old LL = %.2f, new LL = %.2f)", new.LL-old.LL, new.LL, old.LL))
-      print("---")
     }
     res = coef(res)
     
