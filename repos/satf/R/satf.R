@@ -42,9 +42,8 @@ satf_gridsearch <- function(start, constraints, ...) {
   start.vec[[which.max(logLik.vec)]]
 }
 
-satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.id=NULL, 
-                  constraints=list(),
-                  reoptimize.criterion=FALSE, reoptimize.corr=FALSE, 
+satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.id=NULL, constraints=list(), 
+                  optimize.incrementally=TRUE, reoptimize.criterion=TRUE, reoptimize.corr=TRUE, 
                   likelihood.byrow=FALSE, debug=F, method="Nelder-Mead",
                   .internal.init.optional=FALSE, .internal.cleanup=TRUE)
 {
@@ -137,26 +136,36 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
       print("-------------------")
     }
   }
-
-  # ignore correlation parameter for now, if specified
-  rcpp_set_coef_values( c(corr.mrsat=0) )
-
-  coeforder = append(dm$params.criterion, dm$params.dprime)
-
-  # optimize in steps on subsets of the data
-  for(i in 1:length(coeforder)) {
-    log_step_n(i)
-    selection.variables = c(unlist(coeforder[1:i]),  'corr.mrsat' )
-    start = optimize_subset(variable=coeforder[[i]], start=start, selection=selection.variables) 
+  
+  n.step = 0
+  if(optimize.incrementally) {
+    # ignore correlation parameter for now, if specified
+    rcpp_set_coef_values( c(corr.mrsat=0) )
+    coeforder = append(dm$params.criterion, dm$params.dprime)
+    
+    cur.start = start
+    # optimize in steps on subsets of the data
+    for(n.step in 1:length(coeforder)) {
+      log_step_n(n.step)
+      selection.variables = c( unlist(coeforder[1:n.step]),  'corr.mrsat' )
+      cur.start = optimize_subset(variable=coeforder[[n.step]], start=cur.start, selection=selection.variables) 
+      if( any(is.nan(cur.start)) ) {
+        break;
+      }
+    }
+    if( !any(is.nan(cur.start)) ) {
+        start = cur.start
+    }
+    # re-enable the correlation coefficient
+    rcpp_reset_coef_ranges( 'corr.mrsat' )
   }
 
-  # optimize over the correlation coefficient
-  log_step_n(i+1)
-  rcpp_reset_coef_ranges( 'corr.mrsat' )
+  # optimize the correlation coefficient
+  log_step_n(n.step+1)
   start = optimize_subset(variable='corr.mrsat', start=start) 
 
   # reoptimize dprime or more parameters
-  log_step_n(i+2)
+  log_step_n(n.step+2)
   free.variables = unlist(dm$params.dprime)
   if(reoptimize.criterion) free.variables = c(free.variables, unlist(dm$params.criterion))
   if(reoptimize.corr)      free.variables = c(free.variables, 'corr.mrsat') 
@@ -219,6 +228,8 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   if(debug) {
     variable.coefnames <- variable.coefnames[variable.coefnames%in%names(start)]
     print(sprintf("optimizing: %s", paste(variable.coefnames, collapse=', ') ))
+    print(sprintf("data points: %d", length(rcpp_return_selection()) ))
+#    print(data[rcpp_return_selection(),])
   }
 
   n.free = sum(!fixed)
@@ -231,26 +242,47 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
     res[!fixed] = res.optim$maximum
     
   } else if(method == "Nelder-Mead") {
+    
+    generate_parscale <- function(par) {pmax(abs(start), .1) }
+    
     if(any(start==0.0)) parscale = rep(1, length(start))
     else                parscale = abs(start)
     res = maxLik(logLik=fnLogLik, grad=compute_logLikFn_gradient, start=start, fixed=fixed,
                  parscale=parscale, iterlim=10^6, method="Nelder-Mead", print.level=print.level)
+    i = 0
+    while(res$code == 10) { ## try restarting optimization 10 times if the simplex degenerates
+      i = i + 1
+      if(i > 10) break;
+      start = coef(res)
+      if(any(start==0.0)) parscale = rep(1, length(start))
+      else                parscale = abs(start)
+      res = maxLik(logLik=fnLogLik, grad=compute_logLikFn_gradient, start=start, fixed=fixed,
+                   parscale=parscale, iterlim=10^6, method="Nelder-Mead", print.level=print.level)
+    }
     if(debug) {
       print(sprintf("method: %s", method))
       print(sprintf("code: %d", res$code))
-      print(sprintf("iterations: %d", res$iterations))    
-      print("coefs")
-      print( rcpp_constrain_coefs( coef(res) ) )
-      old.LL = compute_logLikFn( coefs=start, by_row=FALSE, tolerate_imprecision=TRUE)
-      new.LL = compute_logLikFn( coefs=coef(res), by_row=FALSE, tolerate_imprecision=TRUE)
-      print(sprintf("LL improved by %.2f (old LL = %.2f, new LL = %.2f)", new.LL-old.LL, new.LL, old.LL))
+      print(sprintf("iterations: %d", res$iterations))
     }
-    res = coef(res)
-    
+    if(res$code == 100) { ## Initial value out of range.
+      res = start*NaN     
+    } else {
+      res = coef(res)
+    }
   } else {
     stop("This optimization method is not implemented.")
     ## res = maxLik(logLik=fnLogLik, grad=compute_logLikFn_gradient, start=start, fixed=fixed, iterlim=10^6, 
     ##             method="Nelder-Mead", print.level=print.level)
+  }
+  if(debug) {
+    print("coefs")
+    constrained.coefs = rcpp_constrain_coefs( res )
+    idx = which(names(constrained.coefs)%in%variable.coefnames)
+    names(constrained.coefs)[idx] = paste0('*',names(constrained.coefs)[idx],'*')
+    print( constrained.coefs )
+    old.LL = compute_logLikFn( coefs=start, by_row=FALSE, tolerate_imprecision=TRUE)
+    new.LL = compute_logLikFn( coefs=res, by_row=FALSE, tolerate_imprecision=TRUE)
+    print(sprintf("LL improved by %.2f (old LL = %.2f, new LL = %.2f)", new.LL-old.LL, old.LL, new.LL))
   }
   rcpp_reset_selection()
   res
