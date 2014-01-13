@@ -17,7 +17,7 @@ LogicalVector rcpp_initialize_logLikFn(CharacterVector& dv, NumericMatrix& dm, I
 {	
   _dbg_function("rcpp_initialize_logLikFn", 1);
     zzz = new CDataContainer(dv, dm, dm_ncoef, constraints, data, cnames);
-  _dbg((0, "returning"));
+    _dbg((0, "returning"));
     return Rcpp::wrap(true);
 }
 
@@ -25,19 +25,22 @@ LogicalVector rcpp_initialize_logLikFn(CharacterVector& dv, NumericMatrix& dm, I
 LogicalVector rcpp_update_constraints_logLikFn(NumericMatrix& constraints)
 {  
   _dbg_function("rcpp_initialize_logLikFn", 1);
-  zzz->UpdateConstraints(constraints);
+  if(zzz != NULL) {
+    zzz->UpdateConstraints(constraints);
+    return Rcpp::wrap(true);
+  }
+  return Rcpp::wrap(false);
   _dbg((0, "returning"));
-  return Rcpp::wrap(true);
 }
 
 // [[Rcpp::export]]
 LogicalVector rcpp_deinitialize_logLikFn() {
   _dbg_function("rcpp_deinitialize_logLikFn", 1);
   _dbg((0, "pointer <0x%x>", zzz));
-  	delete zzz;
-  	zzz = NULL;
+	delete zzz;
+	zzz = NULL;
   _dbg((0, "returning"));
-    return Rcpp::wrap(true);
+  return Rcpp::wrap(true);
 }
 
 // [[Rcpp::export]]
@@ -49,86 +52,119 @@ LogicalVector rcpp_is_initialized_logLikFn() {
 // [[Rcpp::export]]
 CharacterVector rcpp_get_coef_names() {
   _dbg_function("rcpp_is_initialized_logLikFn", 1);
-  return Rcpp::wrap(zzz->CoefNames());
+  if(zzz != NULL)
+    return Rcpp::wrap(zzz->CoefNames());
+  else
+    return Rcpp::wrap(CharacterVector());
 }
 
 // [[Rcpp::export]]
 DoubleVector rcpp_compute_logLikFn(DoubleVector& coefs, bool by_row=false, bool tolerate_imprecision=true, bool force_update=false) {
   _dbg_function("rcpp_compute_logLikFn", 1);
-  DoubleVector res = zzz->ObjectiveFunction(coefs, by_row, tolerate_imprecision, force_update);
-  _dbg((0, "returning"));
-  return Rcpp::wrap( res );
+  if(zzz != NULL) {
+    DoubleVector res = zzz->ObjectiveFunction(coefs, by_row, force_update);
+    _dbg((0, "returning"));
+    return Rcpp::wrap( res );
+  } else {
+    return Rcpp::wrap(DoubleVector());
+  }
 }
 
+
 // [[Rcpp::export]]
-DoubleVector rcpp_compute_logLikFn_gradient(DoubleVector& coefs, bool by_row=false, bool tolerate_imprecision=true) {
+NumericMatrix rcpp_compute_logLikFn_gradient(DoubleVector& coefs, bool by_row=false, bool tolerate_imprecision=true) {
   _dbg_function("rcpp_compute_logLikFn_gradient", 1);
-  DoubleVector gradient = zzz->ObjectiveFunctionGradient(coefs, by_row, tolerate_imprecision);
-  _dbg((0, "returning"));
-  return Rcpp::wrap(gradient);
+  if(zzz != NULL) {
+    NumericMatrix gradient = zzz->ObjectiveFunctionGradient(coefs, by_row, tolerate_imprecision);
+    _dbg((0, "returning"));
+    return Rcpp::wrap(gradient);
+  }
+  return Rcpp::wrap(DoubleVector());
 }
 
 // [[Rcpp::export]]
 DoubleVector rcpp_constrain_coefs(DoubleVector& coefs) {
   _dbg_function("rcpp_constrain_coefs", 1);
-  _dbg((0, "init"));
-  DoubleVector res = zzz->ConstrainCoefs(coefs, true);
-  _dbg((0, "returning"));
-  return Rcpp::wrap(res);
+  if(zzz != NULL) {
+      DoubleVector res = zzz->ConstrainCoefs(coefs, true);
+      _dbg((0, "returning"));
+      return Rcpp::wrap(res);
+  }
+  return Rcpp::wrap(DoubleVector());
 }
 
 // [[Rcpp::export]]
 DoubleVector rcpp_unconstrain_coefs(DoubleVector& coefs) {
   _dbg_function("rcpp_constrain_coefs", 1);
-  _dbg((0, "init"));
-  DoubleVector res = zzz->UnconstrainCoefs(coefs);
-  _dbg((0, "returning"));
-  return Rcpp::wrap(res);
+      if(zzz != NULL) {
+      DoubleVector res = zzz->UnconstrainCoefs(coefs);
+      _dbg((0, "returning"));
+      return Rcpp::wrap(res);
+  }
+  return Rcpp::wrap(DoubleVector());
 }
 
 // [[Rcpp::export]]
 bool rcpp_select_coef_subset(Rcpp::CharacterVector& coefnames) {
   _dbg_function("rcpp_select_coef_subset", 1);
-  bool res = zzz->SelectCoefSubset(coefnames);
-  _dbg((0, "returning"));
-  return Rcpp::wrap( res );
+  if(zzz != NULL) {
+    bool res = zzz->SelectCoefSubset(coefnames);
+    _dbg((0, "returning"));
+    return Rcpp::wrap( res );
+  }
+  return Rcpp::wrap( false );
 }
 
 // [[Rcpp::export]]
 void rcpp_reset_selection( ) {
   _dbg_function("rcpp_reset_selection", 1);
-  zzz->ResetSubset();
-  _dbg((0, "returning"));
+  if(zzz != NULL) {
+    zzz->ResetSubset();
+    _dbg((0, "returning"));
+  }
 }
 
 // [[Rcpp::export]]
 IntegerVector rcpp_return_selection( ) {
   _dbg_function("rcpp_reset_selection", 1);
-  std::vector<int> selection = zzz->ReturnSelection();
-  // map to indices starting at 1, as used in R
-  for(size_t i=0; i < selection.size(); i++)
-    selection[i] = selection[i] + 1;
-  return Rcpp::wrap( selection );
+  if(zzz != NULL) {
+      std::vector<int> selection = zzz->ReturnSelection();
+      // map to indices starting at 1, as used in R
+      for(size_t i=0; i < selection.size(); i++)
+        selection[i] = selection[i] + 1;
+      _dbg((0, "returning"));
+      return Rcpp::wrap( selection );
+  }
+  return Rcpp::wrap( IntegerVector() );
 }
 
 // [[Rcpp::export]]
 void rcpp_set_coef_values(DoubleVector& values) {
   _dbg_function("rcpp_set_coef_values", 1);
-  zzz->SetCoefValues(values);
-  _dbg((0, "returning"));
+  if(zzz != NULL) {
+      zzz->SetCoefValues(values);
+      _dbg((0, "returning"));
+  }
 }
 
 // [[Rcpp::export]]
 void rcpp_reset_coef_ranges( CharacterVector& names ) {
   _dbg_function("rcpp_reset_coef_values", 1);
-   zzz->ResetCoefRanges(names);
+  if(zzz != NULL) {
+     zzz->ResetCoefRanges(names);
   _dbg((0, "returning"));
+  }
 }
 
 
 // [[Rcpp::export]]
 double rcpp_pnorm2d(double x_lower, double y_lower, double rho, bool second_order) {
     return pnorm2d(x_lower, y_lower, rho, second_order);
+}
+
+// [[Rcpp::export]]
+double rcpp_pnorm2d_derivative_by_rho(double a, double b, double rho, bool second_order) {
+    return pnorm2d_derivative_by_rho(a, b, rho, second_order);
 }
 
 // [[Rcpp::export]]

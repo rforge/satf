@@ -30,6 +30,7 @@ typedef enum EParameter {
 
 
 class CCoefConstraints;
+class CDataPoint;
 
 class CDesignMatrixRow
 {
@@ -41,8 +42,13 @@ class CDesignMatrixRow
 
     std::vector<int>& DatapointIndices() { return mDatapointIndices; }
     std::vector<double>& CurrentParameters() { return mCurrentParameters; }
+    
+    bool ObjectiveFunction(CCoefs& coefs, bool force_update, std::vector<CDataPoint*>& datapoints, 
+                            Rcpp::DoubleVector *LLVector);
+    void ObjectiveFunctionGradient(CCoefs& coefs, bool force_update,std::vector<CDataPoint*>& datapoints, 
+                                   Rcpp::NumericMatrix *LLGradient);
 
-    bool CheckIfAnyCoefsUsed(std::vector<bool>& coefs_set);
+    bool CheckIfAnyFreeCoefsUsed(std::vector<bool>& coefs_set);
 
     double operator[](int i)  { return mElements[i]; }
     double operator==(CDesignMatrixRow& other) const;
@@ -65,14 +71,16 @@ class CDataPoint {
                int _index, CDataPoint* last_datapoint);
   
     inline double LogLik() { return mLogLik; }
+    inline std::vector<double>& LogLikGradient() { return mLogLikGradient; }
 
 //  Rcpp::DoubleVector ComputeLogLikGradient(CCoefs& coefs);
 
-    void UpdateParameters(CDesignMatrixRow& dm_row, bool tolerate_imprecisions=false);
-    void ResetParameters();
+    void UpdateLogLikGradient(std::vector<double>& cur_parameters, CCoefs& coefs, Rcpp::DoubleVector& dm_row);
+    void UpdateLogLik(std::vector<double>& cur_parameters);
+    void Reset();
 
 private:
-    void UpdateDprime(double satf_asymptote, double satf_invrate, double satf_intercept) {
+    void ComputeDprime(double satf_asymptote, double satf_invrate, double satf_intercept) {
       dprime.Update(time, satf_asymptote, satf_invrate, satf_intercept);
       relative_criterion = criterion.value - dprime.value;
     }
@@ -81,8 +89,14 @@ private:
       criterion.Update(time, bias_max, bias_invrate, bias_intercept, bias_min);
       relative_criterion = criterion.value - dprime.value;
     }
-    void UpdateLogLik(double corr_mrsat, bool tolerate_imprecisions=false);
+    void ComputeLogLik(double corr_mrsat, bool tolerate_imprecisions=false);
 
+    void ComputeLogLikGradient(CCoefs& coefs, Rcpp::DoubleVector& dm_row, double corr_mrsat);
+    double IndependentLikDerivative(CCoefs& coefs, int coef_index, double dm_value);
+    double DependentLikDerivative(CCoefs& coefs, int coef_index, double dm_value, double corr_mrsat);
+    
+    void ComputeRelativeCriterionGradient(CCoefs& coefs, Rcpp::DoubleVector& dm_row);
+    double RelativeCriterionDerivative(CCoefs& coefs, Parameter type, double transform_deriv, double dm_value);
     
 public:
     SNAEPoint dprime;
@@ -95,6 +109,8 @@ public:
     double time;
     int index;
     
+    std::vector<double> mRelativeCriterionGradient;
+    std::vector<double> mLogLikGradient;
     CDataPoint* mLastDatapoint;
 
     _dbg_class_init;
@@ -153,6 +169,7 @@ class CCoefConstraints
 
 
 
+// TODO: Rename 'Parameter' to 'ParameterType'
 class CCoefs {
   public:
     typedef enum EFunction {
@@ -179,6 +196,9 @@ public:
     bool HasParameter(Parameter parameter) { return mConstraints->HasParameter(parameter); }
 
     double TransformFn(int coef_index, Function fn);
+  
+    Parameter ParameterType(int index) {return (Parameter)mConstraints->mCoefTypes[index];}
+    Parameter ParameterType(std::string& name) {return mConstraints->StringToParameter(name);}
 
     inline int size() { return mConstrainedCoefs.size(); } 
     inline double operator[](int i) { return mConstrainedCoefs[i]; } 
@@ -207,10 +227,8 @@ class CDataContainer
 
     void UpdateConstraints(Rcpp::NumericMatrix& constraints) { mCoefConstraints.UpdateConstraints(constraints); }
 
-    Rcpp::DoubleVector ObjectiveFunction(Rcpp::DoubleVector& coefs, bool by_row=false, 
-                                         bool tolerate_imprecisions=false, bool force_update=false);
-    Rcpp::DoubleVector ObjectiveFunctionGradient(Rcpp::DoubleVector& coefs,
-                                         bool by_row=false, bool tolerate_imprecisions=false);
+    Rcpp::DoubleVector ObjectiveFunction(Rcpp::DoubleVector& coefs, bool by_row=false, bool force_update=false);
+    Rcpp::NumericMatrix ObjectiveFunctionGradient(Rcpp::DoubleVector& coefs, bool by_row=false, bool force_update=false);
     
     Rcpp::DoubleVector ConstrainCoefs(Rcpp::DoubleVector& raw_coefs, bool use_names)  {
       return CCoefs(raw_coefs, CCoefs::FnConstrain, use_names, mCoefConstraints).constrained();

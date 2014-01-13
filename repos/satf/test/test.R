@@ -2,10 +2,28 @@
 
 source("~/CodeSATF/test/satf_load.R")
 
+if(FALSE) {
+dddnorm = function(x) {-(1/2)*sqrt(2)*exp(-(1/2)*x^2)/sqrt(pi)+(1/2)*sqrt(2)*x^2*exp(-(1/2)*x^2)/sqrt(pi)}
+
+a=1; b=1;
+fn = function(p) {
+  rho = p[[1]]
+  res = rcpp_pnorm2d(a, b, rho, TRUE);
+}
+fn_gradient = function(p) {
+  rho = p[[1]]
+  rcpp_pnorm2d_derivative_by_rho(a, b, rho, TRUE);
+  #dnorm(-(rho*a-b)/sqrt(1-rho^2))*(-a/sqrt(1-rho^2)-(rho*a-b)*rho/(1-rho^2)^(3/2))*pnorm(a)
+}
+
+print( compareDerivatives(f=fn, grad=fn_gradient, t0=c(.99)) )
+stop()
+}
+
   fn.bias <- function(t) t*0 # SATF(t, asymptote=1, invrate=1, intercept=.4)
   fn.satf1 <- function(t) SATF(t, asymptote=3, invrate=1, intercept=.4)
   fn.satf2 <- function(t) SATF(t, asymptote=2, invrate=.5, intercept=0)
-  sim.n <- 32*2
+  sim.n <- 10^2#32*2
   time = seq(-.2,4.6,.4); rho = .85;
   data1 <- satf_generate(criterion=fn.bias, dprime=fn.satf1, time=time, n=sim.n, rho=rho, label="condition1")
   data2 <- satf_generate(criterion=fn.bias, dprime=fn.satf2, time=time, n=sim.n, rho=rho, label="condition2")
@@ -23,11 +41,16 @@ source("~/CodeSATF/test/satf_load.R")
   data.nyes$c2 <- ifelse(data.nyes$condition=="condition2", 1, 0)
   data.nyes$c3 <- ifelse(data.nyes$condition=="condition3", 1, 0)
 
+#save(data, file="/tmp/xxx.rda")
+load(file="/tmp/xxx.rda")
 
-(m.raw <- satf(dv=c(response=~response), signal=~signal, start = c(asymptote=2, invrate=1, intercept=.4, bias.min=0),
-               contrasts = c(asymptote=~1+c2+c3, invrate=~1+c2+c3, intercept=~1+c2+c3),
-               bias = ~1, constraints=list(), time=~time, trial.id=~trial.id,
-               data=data, metric="logLikRaw", debug=T))
+data = subset(data, condition%in%c("condition1","condition2"))
+(m.raw <- satf(dv=c(response=~response), signal=~signal, 
+               start = c(asymptote=2, invrate=1, intercept=.4, bias.max=1, bias.invrate=1, bias.intercept=-1, bias.min=0),
+               contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+               bias = ~1+c2, constraints=list(), time=~time, trial.id=~trial.id,
+               data=data, metric="logLikRaw", debug=T, reoptimize.times=5, optimize.incrementally=T,
+               reoptimize.criterion=FALSE, reoptimize.corr=TRUE))
 
 data$LL <- m.raw
 data.tmp2 <- subset(data, signal==0)

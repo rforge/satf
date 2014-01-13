@@ -15,16 +15,16 @@ using namespace Rcpp;
 bool log_undefined_values = true;
 
 // TODO 1: Extend the transformation algorithm to include the possibility of stating that coefficient a
-//         should not be smaller than coefficient b, or a should not be smaller than -1*b, etc. Without such
+//         should not be smaller than another coefficient (b), or a should not be smaller than -1*b, etc. Without such
 //         an option, we can end up with negative invrates, which is undesirable.
 
 #define debug_level 10
 
-_dbg_class_set(CCoefConstraints, "CCoefConstraints", 0);
-_dbg_class_set(CCoefs, "CCoefs", 0);
+_dbg_class_set(CCoefConstraints, "CCoefConstraints", 10);
+_dbg_class_set(CCoefs, "CCoefs", 10);
 _dbg_class_set(CDataPoint, "CDataPoint", 10);
 _dbg_class_set(CDesignMatrixRow, "CDesignMatrixRow", 10);
-_dbg_class_set(CDataContainer, "CDataContainer", 0);
+_dbg_class_set(CDataContainer, "CDataContainer", 10);
 
 
 int getMilliCount(){

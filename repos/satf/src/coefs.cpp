@@ -59,6 +59,7 @@ double CCoefs::TransformWithOneBoundary(double x, double lower, Function fn) {
 
 double CCoefs::TransformWithTwoBoundaries(double x, double lower, double upper, Function fn) {
   _dbg_method("TransformWithTwoBoundaries", 2);
+  
   switch(fn) {
     case FnConstrain: // [-Inf, +Inf] -> [0, 1] -> [lower, upper]
     {
@@ -76,9 +77,18 @@ double CCoefs::TransformWithTwoBoundaries(double x, double lower, double upper, 
     
     case FnUnconstrain: // [lower, upper] -> [0, 1] -> [-Inf, +Inf]
     {
+        if(x < lower || x > upper)
+          return nan("");
+      
         double y = (x-lower)/(upper-lower);
         double z = log(y/(1-y));
-        return(z);
+        
+        if( isinf(z) ) {
+          // transform of x is undefined because it is too close to the upper or lower boundary
+          // so we will use 30 and -30 as the effective maxima
+          z = ((x-lower) < (upper-x)) ? -30 : 30;
+      }
+      return(z);
     }
     break;
   };

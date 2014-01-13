@@ -13,30 +13,130 @@
 namespace AlbersKallenberg1994 {
   
   // derivative of the normal distribution density function
-  inline double _ddnorm(double x) {
-    return -_dnorm(x)*x;
+/*  double _ddddnorm( double x) {
+    return -(1/2)*M_SQRT2*x*exp(-(1/2)*x*x)*(-3+x*x)*(M_2_SQRTPI/2);
   }
+*/
+  inline double _ddnorm(double x) {
+    return -(_dnorm(x)*x);
+  }
+  // TODO: optimize this a bit
+  double _dddnorm( double x) {
+    return _dnorm(x)*(x*x - 1);
+//    return -(_ddnorm(x))*x - _dnorm(x);
+  }
+  
   inline double f_theta(double rho) {
-    return( sqrt(1 - (rho*rho) )/rho );
+    return (sqrt(1 - (rho*rho) )/rho);
+  }
+  
+  inline double f_c(double rho, double a, double b) {
+    return (rho*a - b)/ sqrt(1-(rho*rho));
+  }  
+  
+  inline double f_eta(double c) {
+    return _pnorm(-c);
+  }
+  
+  inline double f_c1(double c, double eta) {
+    return (_dnorm(c) / eta);
+  }
+
+  inline double f_zeta(double a, double theta, double c, double c1) {
+    return (a + theta*(c1 - c));
   }
 
   inline double _pnorm2d(double a, double b, double rho, bool smaller, bool second_order)
   {
-      double theta = sqrt(1 - pow(rho,2)) / rho;
-      double c = (rho*a - b)/ sqrt(1-pow(rho,2));
-      double c1 = _dnorm(c) / _pnorm(-c);
-      double zeta = a + theta*(c1 - c);
-      double eta = _pnorm(-c);
+      double theta = f_theta(rho);
+      double c = f_c(rho, a, b);
+      double eta = f_eta(c);
+      double c1 = _dnorm(c) / eta;
+      double zeta = f_zeta(a, theta, c, c1);
 
-      double res;
-      if(smaller) res = _pnorm(b);
-      else        res = 1-_pnorm(a);
-      res = res - eta*( _pnorm( zeta ) - _pnorm(a) );
-
-      if(second_order)
-        res = res - 0.5*(theta*theta)*eta*_ddnorm( zeta )*( 1 + (c - c1)*c1 );
+      double part1;
+      if(smaller) part1 = _pnorm(b);
+      else        part1 = 1-_pnorm(a);
+      
+      double part2 = eta*_pnorm(a);
+      double part3 = - eta*_pnorm( zeta );
+      double res = part1 + part2 + part3;
+      if(second_order) {
+        double part4a = -0.5*(theta*theta)*eta;
+        double part4b = ( 1 + (c - c1)*c1 );
+        double part4c = _ddnorm( zeta ); // _ddnorm(a);//zeta;//_ddnorm( zeta );
+        double part4 = part4a*part4b*part4c;
+        res += part4;
+      }
       return res;
   }
+
+inline double _pnorm2d_derivative_by_ab(double a, double b, double rho, 
+                                          double a_deriv, double b_deriv, bool smaller, bool second_order=true)
+  {
+     double rho_square = rho*rho;
+     double theta = f_theta(rho);
+     double alpha = (rho*a-b)/sqrt(1-rho_square);
+//     double beta = a/sqrt(1-rho_square)+(rho*a-b)*rho/pow(1-rho_square, 1.5);
+     double nu = _dnorm(alpha)/_pnorm(-alpha);
+     double nu2 = _ddnorm(alpha)/_pnorm(-alpha);
+     double gamma = nu-alpha;
+     double omega = (rho*a_deriv - b_deriv) / sqrt(1-rho_square);
+     double nu_square = nu*nu;
+     double theta_square = theta*theta;
+      double c = f_c(rho, a, b);
+      double eta = f_eta(c);
+      double c1 = _dnorm(c) / eta;
+      double zeta = f_zeta(a, theta, c, c1);
+
+double part1_deriv;
+    if(smaller) part1_deriv = _dnorm(b)*b_deriv;
+    else        part1_deriv = -_dnorm(a)*a_deriv;
+//double mu=0.0, double sigma=1.0, bool lg=false) 
+    double part2_deriv = -exp(_ldnorm(-alpha)+_lpnorm(a))*omega + exp(_lpnorm(-alpha)+_ldnorm(a))*a_deriv;
+    double part3_deriv = -(-_dnorm(-alpha)*_pnorm(a+gamma*theta)*omega+_pnorm(-alpha)*_dnorm(a+gamma*theta)*(a_deriv+theta*omega*(nu2+nu_square-1)));
+    double res = part1_deriv + part2_deriv + part3_deriv;
+    if(second_order) {
+      double part4a = -0.5*(theta*theta)*eta;
+      double part4b = ( 1 + (c - c1)*c1 );
+      double part4c = _ddnorm( zeta );
+      
+      double part4a_deriv = .5*theta_square*_dnorm(-alpha)*omega;
+      double part4b1_deriv = omega*nu + alpha*omega*nu2 + alpha*omega*nu_square;
+      double part4b2_deriv = -2*nu*nu2*omega - 2*nu_square*nu*omega;
+      double part4b_deriv = part4b1_deriv + part4b2_deriv;
+      double part4c_deriv = _dddnorm(zeta)*(a_deriv+theta*omega*(nu2+nu_square-1));
+      double part4_deriv = part4a_deriv*part4b*part4c + part4a*part4b_deriv*part4c + part4a*part4b*part4c_deriv;
+      res += part4_deriv;
+    }
+    return res;
+  }
+
+  // TODO: Clearly, some divergence between the derivate obtained numerical by compareDerivatives() and this derivative is due to the fact that a lot of floating point
+  // arithmetic is done here. Fix it.
+  inline double _pnorm2d_derivative_by_rho(double a, double b, double rho,
+                                             bool smaller, bool second_order=true)
+  {
+     double rho_square = rho*rho;
+     double theta = f_theta(rho);
+     double alpha = (rho*a-b)/sqrt(1-rho_square);
+     double beta = a/sqrt(1-rho_square)+(rho*a-b)*rho/pow(1-rho_square, 1.5);
+     double nu = _dnorm(alpha)/_pnorm(-alpha);
+     double nu2 = _ddnorm(alpha)/_pnorm(-alpha);
+     double gamma = nu-alpha;
+     
+    double part2 = _dnorm(-(rho*a-b)/sqrt(1-rho*rho))*(-a/sqrt(1-rho*rho)-(rho*a-b)*rho/pow(1-rho*rho, 1.5))*_pnorm(a);
+    double part3 = -(-_dnorm(-alpha)*beta*_pnorm(a+gamma*theta)+_pnorm(-alpha)*_dnorm(a+gamma*theta)*(-gamma/sqrt(1-rho_square)-theta*gamma/rho+theta*beta*(_ddnorm(alpha)/_pnorm(-alpha)+pow(_dnorm(alpha)/_pnorm(-alpha),2)-1)));
+    double res = part2 + part3;
+    if(second_order) {
+        double theta_square = theta*theta;
+        double nu_square = nu*nu;
+        double part4 = -(-1.0*_pnorm(-alpha)*_ddnorm(a+theta*gamma)*(1-gamma*nu)/rho-theta_square*_pnorm(-alpha)*_ddnorm(a+theta*gamma)*(1-gamma*nu)/rho-.5*theta_square*_dnorm(-alpha)*beta*_ddnorm(a+theta*gamma)*(1-gamma*nu)+.5*theta_square*_pnorm(-alpha)*(_dddnorm(a+theta*gamma)*(-gamma/sqrt(1-rho_square)-theta*gamma/rho+theta*beta*(nu2+nu_square-1))*(1-gamma*nu)+_ddnorm(a+theta*gamma)*(beta*(1-nu2-nu_square)*nu-gamma*beta*nu2-nu_square*gamma*beta)));
+        res = res + part4;
+    }
+    return res;
+} 
+
 
   inline bool check_constraints(double a, double b, double rho) {
       assert( 0 < rho && rho < 1 );
@@ -44,33 +144,70 @@ namespace AlbersKallenberg1994 {
       else                             return false;
   }
   
-  inline double pnorm2d(double x_upper, double y_upper, double rho, bool second_order) {
+  double pnorm2d(double x_upper, double y_upper, double rho, bool second_order) {
       if( check_constraints(x_upper, y_upper, rho) ) {
         return _pnorm2d(x_upper, y_upper, rho, true, second_order);
       }
-      
       if( check_constraints(y_upper, x_upper, rho) ){
         return _pnorm2d(y_upper, x_upper, rho, true, second_order);
       }
-    
       if( check_constraints(-x_upper, -y_upper, rho) ) {
         return _pnorm2d(-x_upper, -y_upper, rho, false, second_order);
       }
-    
       if( check_constraints(-y_upper, -x_upper, rho) ) {
         return _pnorm2d(-y_upper, -x_upper, rho, false, second_order);
       }
-    
       return nan("");
   }
+  
+    double pnorm2d_derivative_by_rho(double x_upper, double y_upper, double rho, bool second_order) {
+      if( check_constraints(x_upper, y_upper, rho) ) {
+        return _pnorm2d_derivative_by_rho(x_upper, y_upper, rho, true, second_order);
+      }
+      if( check_constraints(y_upper, x_upper, rho) ){
+        return _pnorm2d_derivative_by_rho(y_upper, x_upper, rho, true, second_order);
+      }
+      if( check_constraints(-x_upper, -y_upper, rho) ) {
+        return _pnorm2d_derivative_by_rho(-x_upper, -y_upper, rho, false, second_order);
+      }
+      if( check_constraints(-y_upper, -x_upper, rho) ) {
+        return _pnorm2d_derivative_by_rho(-y_upper, -x_upper, rho, false, second_order);
+      }
+      return nan("");
+    }
+    
+    inline double pnorm2d_derivative_by_ab(double x_upper, double y_upper, double rho, double x_upper_deriv, double y_upper_deriv, bool second_order) {
+      if( check_constraints(x_upper, y_upper, rho) ) {
+        return _pnorm2d_derivative_by_ab(x_upper, y_upper, rho, x_upper_deriv, y_upper_deriv, true, second_order);
+      }
+      if( check_constraints(y_upper, x_upper, rho) ){
+        return _pnorm2d_derivative_by_ab(y_upper, x_upper, rho, y_upper_deriv, x_upper_deriv, true, second_order);
+      }
+      if( check_constraints(-x_upper, -y_upper, rho) ) {
+        return _pnorm2d_derivative_by_ab(-x_upper, -y_upper, rho, -x_upper_deriv, -y_upper_deriv, false, second_order);
+      }
+      if( check_constraints(-y_upper, -x_upper, rho) ) {
+        return _pnorm2d_derivative_by_ab(-y_upper, -x_upper, rho, -y_upper_deriv, -x_upper_deriv, false, second_order);
+      }
+      return nan("");
+    }
 }
 
 double pnorm2d(double x_upper, double y_upper, double rho, double second_order) {
     return AlbersKallenberg1994::pnorm2d(x_upper, y_upper, rho, second_order);
 }
 
+double pnorm2d_derivative_by_ab(double x_upper, double y_upper, double rho, double x_upper_deriv, double y_upper_deriv, bool second_order) {
+  return AlbersKallenberg1994::pnorm2d_derivative_by_ab(x_upper, y_upper, rho, x_upper_deriv, y_upper_deriv, second_order);
+}
+  
+double pnorm2d_derivative_by_rho(double x_upper, double y_upper, double rho, bool second_order) { 
+  return AlbersKallenberg1994::pnorm2d_derivative_by_rho(x_upper, y_upper, rho, second_order);
+}
+
+ 
 double pnorm_conditional(double rho, double relative_criterion, double last_relative_criterion, 
-                         bool response_above_criterion, bool last_response_above_criterion, bool tolerate_imprecisions)
+                         bool response_above_criterion, bool last_response_above_criterion)
 {
     if(last_response_above_criterion) {
       last_relative_criterion = -last_relative_criterion;
@@ -78,15 +215,58 @@ double pnorm_conditional(double rho, double relative_criterion, double last_rela
     }
       
     double p_last = _pnorm(last_relative_criterion, 0.0, 1.0, true, false);
-    double p_both = pnorm2d(relative_criterion, last_relative_criterion, rho, true);
-
+    double p_joint = pnorm2d(relative_criterion, last_relative_criterion, rho, true);
+    
     if(response_above_criterion == last_response_above_criterion) {
-//      printf("%f(p_both)/%f(p_last) = %f\n", p_both, p_last, p_both/p_last);
-      return log(p_both/p_last);
+      return p_joint/p_last;
     }
-//    printf("1 - %f(p_both)/%f(p_last) = %f\n", p_both, p_last, 1-p_both/p_last);
-    return log(1 - p_both/p_last);
+    return 1 - p_joint/p_last;
 }
+
+double pnorm_conditional_derivative_criteria(double rho, double relative_criterion, double last_relative_criterion, 
+                                              double relative_criterion_deriv, double last_relative_criterion_deriv, 
+                                              bool response_above_criterion, bool last_response_above_criterion)
+{
+    if(last_response_above_criterion) {
+      last_relative_criterion = -last_relative_criterion;
+      relative_criterion = -relative_criterion;
+      relative_criterion_deriv = -relative_criterion_deriv;
+      last_relative_criterion_deriv = -last_relative_criterion_deriv;
+    }
+    
+    double p_last = _pnorm(last_relative_criterion, 0.0, 1.0, true, false);
+    double p_joint = pnorm2d(relative_criterion, last_relative_criterion, rho, true);
+
+    double deriv_last = _dnorm(last_relative_criterion)*last_relative_criterion_deriv;
+    double deriv_joint = pnorm2d_derivative_by_ab(relative_criterion, last_relative_criterion, rho, relative_criterion_deriv, last_relative_criterion_deriv, true);
+    
+    if(response_above_criterion == last_response_above_criterion) {
+      return (deriv_joint*p_last - deriv_last*p_joint)/(p_last*p_last);
+    }
+    // else
+    return -deriv_joint/p_last+p_joint*deriv_last/(p_last*p_last);
+}
+
+
+
+double pnorm_conditional_derivative_rho(double rho, double relative_criterion, double last_relative_criterion, 
+                                        bool response_above_criterion, bool last_response_above_criterion)
+{
+    
+    if(last_response_above_criterion) {
+      last_relative_criterion = -last_relative_criterion;
+      relative_criterion = -relative_criterion;
+    }
+    
+    double p_last = _pnorm(last_relative_criterion, 0.0, 1.0, true, false);
+    double deriv_joint = pnorm2d_derivative_by_rho(relative_criterion, last_relative_criterion, rho, true);
+    
+    if(response_above_criterion == last_response_above_criterion) {
+      return deriv_joint/p_last;
+    }
+    return - deriv_joint/p_last;
+}
+
 
 /*
 

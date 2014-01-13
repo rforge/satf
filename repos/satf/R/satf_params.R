@@ -25,8 +25,6 @@ init_designmatrix <- function(data, contrasts, bias, cnames, satf.coefnames.core
     
   }
 
-# TODO: Create a list with different contrasts  
-  
   # rearange start parameters, make sure the coefficients for every parameter are contiguous, 
   # and create the design matrix
 
@@ -158,7 +156,7 @@ init_coefs_and_constraints <- function(coefnames, start, constraints, coreparams
     {
       start[[coefname]] = new_start_value(cur.constraint, cur.start)
       start.changed[[coefname]] = TRUE
-    }
+    } 
   }
 
   if( any( start.changed )) {
@@ -166,7 +164,7 @@ init_coefs_and_constraints <- function(coefnames, start, constraints, coreparams
     start.changed = paste0(start.changed, '=', start[start.changed],  collapse=", ")
     warning(sprintf("Start values changed to <%s>.", start.changed))
   }
-  
+
   fixed.coefs <- coefnames[constraint.matrix[,'upper'] == constraint.matrix[,'lower']]
   
   return(list(constraints=constraint.matrix, start=start, fixed.coefs=fixed.coefs));

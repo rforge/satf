@@ -94,72 +94,92 @@ void CDataContainer::AddDMRow(DoubleVector& dm_row, int datapoint_index)
 }
 
 
-inline void save_LL(DoubleVector& LLVector, double cur_LL, int idx, bool by_row) {
-    if(by_row) 
-        LLVector[idx] = cur_LL;
-    else
-        LLVector[0] += cur_LL;
-}
-
-Rcpp::DoubleVector CDataContainer::ObjectiveFunction(DoubleVector& raw_coefs, bool by_row, 
-                                                     bool tolerate_imprecisions, bool force_update)
+Rcpp::DoubleVector CDataContainer::ObjectiveFunction(DoubleVector& raw_coefs, bool by_row, bool force_update)
 {
   _dbg_method("ObjectiveFunction", 1);
 
   if(mObjectiveFunctionCalls == 0)
     force_update = true;
   
-  mForceUpdate = mForceUpdate || force_update;
+  force_update = mForceUpdate || force_update;
+  mForceUpdate = false;
   mObjectiveFunctionCalls++;
 
 // TODO: remove
-  mForceUpdate = true;
+//  mForceUpdate = true;
 
-  DoubleVector LLVector;
-  if(by_row) LLVector = DoubleVector(mDatapoints.size());
-  else       LLVector.push_back(0);
+  int n_llvector_len = by_row ? mDatapoints.size() : 1;
+  DoubleVector LLVector(n_llvector_len);
+  for(int i=0; i < n_llvector_len; i++) {
+      LLVector[i] = 0.0;
+  }
 
+  // TODO: use mLastCoefs. They aren't being used as of now.
   // initialize coefficients
   CCoefs coefs =  CCoefs(raw_coefs, CCoefs::FnConstrain, false, mCoefConstraints);
 
   for(size_t i=0; i < mUniqueDMRows.size(); i++)
   {
-    if(mEnabled[i] ) 
-    {
-        _dbg((0, "updated parameter for dm row %d/%d", i, mUniqueDMRows.size() )); 
-        CDesignMatrixRow& cur_dmrow = mUniqueDMRows[i];
-        std::vector<int>& datapoint_idxs = cur_dmrow.DatapointIndices();
-        bool params_changed = cur_dmrow.UpdateParameters(coefs, mForceUpdate);
-        _dbg((0, "updated parameters"));
-        for(size_t j=0; j < datapoint_idxs.size(); j++)
-        {
-          int idx = datapoint_idxs[j];
-        _dbg((0, "updating datapoint %d", idx));
-          CDataPoint* cur_datapoint = mDatapoints[idx];
-        _dbg((0, "updating datapoint %d (0x%x)", idx, cur_datapoint));
-          if(params_changed)
-            cur_datapoint->UpdateParameters(cur_dmrow, tolerate_imprecisions);
-          double cur_LL = cur_datapoint->LogLik();
-          save_LL(LLVector, cur_LL, idx, by_row);
+    if(mEnabled[i] ) {
+        _dbg((0, "updating parameter for enabled dm row %d/%d", i, mUniqueDMRows.size() )); 
+        mUniqueDMRows[i].ObjectiveFunction(coefs, force_update, mDatapoints, &LLVector);
+    } else {
+        // Computation of log-likelihood on the disabled part of the dataset is meant to ensure that optimization on the selected part does not yield
+        // estimates which are invalid for the disabled part. The result is discarded unless it's NaN.
+        _dbg((0, "updating parameter for disabled dm row %d/%d", i, mUniqueDMRows.size() )); 
+        bool LL_defined = mUniqueDMRows[i].ObjectiveFunction(coefs, force_update, mDatapoints, NULL);
+        if(!by_row && !LL_defined) {
+          LLVector[0] = R_NaN;
+          return LLVector;
         }
     }
   }
-
   mLastCoefs = coefs;
-
-/*
-  // this is mainly for debugging purposes
-  // reset dprime and criterion
-  for(size_t i=0; i < mDatapoints.size(); i++) {
-    if( mEnabled[i] ) {
-        mDatapoints[i].ResetDprime();
-        mDatapoints[i].ResetCriterion();
-    }
-  }
-*/  
+  _dbg((0, "returning")); 
   return LLVector;
 }
 
+Rcpp::NumericMatrix CDataContainer::ObjectiveFunctionGradient(DoubleVector& raw_coefs, bool by_row, bool force_update)
+{
+  _dbg_method("ObjectiveFunctionGradient", 1);
+
+  if(mObjectiveFunctionCalls == 0)
+    force_update = true;
+  
+  force_update = mForceUpdate || force_update;
+  mForceUpdate = false;
+  mObjectiveFunctionCalls++;
+
+// TODO: remove
+  mForceUpdate = true;
+
+  // TODO: use mLastCoefs. They aren't being used as of now.
+  // initialize coefficients
+  CCoefs coefs =  CCoefs(raw_coefs, CCoefs::FnConstrain, false, mCoefConstraints);
+
+  int nrows = by_row ? mDatapoints.size() : 1;
+  int ncols = coefs.size();
+  NumericMatrix LLGradient = NumericMatrix(nrows, ncols);
+  for(int i=0; i < nrows; i++) {
+    for(int j=0; j < ncols; j++) {
+      LLGradient(i, j) = 0.0;
+    }
+  }
+  
+  for(size_t i=0; i < mUniqueDMRows.size(); i++)
+  {
+    if(mEnabled[i] ) {
+        _dbg((0, "updating parameter for enabled dm row %d/%d", i, mUniqueDMRows.size() )); 
+        mUniqueDMRows[i].ObjectiveFunctionGradient(coefs, force_update, mDatapoints, &LLGradient);
+    }
+  }
+  _dbg((0, "all gradients obtained")); 
+  // TODO: the next line causes some sort of error, not sure why
+  // mLastCoefs = coefs;
+  return LLGradient;
+}
+
+/*
 Rcpp::DoubleVector CDataContainer::ObjectiveFunctionGradient(DoubleVector& raw_coefs, bool by_row, bool tolerate_imprecisions)
 {
   _dbg_method("ObjectiveFunctionGradient", 1);
@@ -182,11 +202,11 @@ Rcpp::DoubleVector CDataContainer::ObjectiveFunctionGradient(DoubleVector& raw_c
       return invalid_gradient;
   }
   return gradient;
-  */
+  *//*
       DoubleVector invalid_gradient(raw_coefs.size(), R_NaN);
       return invalid_gradient;
 }
-
+*/
 /*
 void CDataContainer::DetermineZeroRows(LogicalVector& zero_columns, std::vector<bool>& row_selected, bool all)
 {
@@ -231,7 +251,7 @@ bool CDataContainer::SelectCoefSubset(Rcpp::CharacterVector& coefnames)
   
   // disable all design matrix rows which use deselected coefficients
   for(size_t i=0; i < mUniqueDMRows.size(); i++) {
-    if(mUniqueDMRows[i].CheckIfAnyCoefsUsed(deselected_coefs))
+    if(mUniqueDMRows[i].CheckIfAnyFreeCoefsUsed(deselected_coefs))
       mEnabled[i] = false;
     else
       mEnabled[i] = true;
