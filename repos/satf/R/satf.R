@@ -2,6 +2,7 @@
 
 Deviance <- function(LL) -2*LL
 AIC <- function(LL, k) Deviance(LL) + 2*k
+BIC <- function(LL, k, n) Deviance(LL) + k*log(n)
 
 p2logodds <- function(p) log(p/(1-p))
 logodds2p <- function(lodds) exp(lodds)/(1+exp(lodds))
@@ -12,13 +13,14 @@ NumLargest <- .Machine$double.xmax
 
 compute_logLikFn <- function(coefs, by_row=FALSE, force_update=FALSE) {
 	res = rcpp_compute_logLikFn(coefs, by_row, FALSE, force_update)
+#  print(res)
   res
 }
 
 compute_logLikFn_gradient <- function(coefs, by_row=FALSE) {
   res = rcpp_compute_logLikFn_gradient(coefs, by_row, FALSE)
   colnames(res) = names(coefs)
-  print(rbind(coefs,res))
+#  print(rbind(coefs,res))
   res
 }
 
@@ -52,9 +54,10 @@ satf_gridsearch <- function(start, constraints, ...) {
 }
 
 satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.id=NULL, constraints=list(), 
-                  optimize.incrementally=TRUE, reoptimize.criterion=TRUE, reoptimize.corr=TRUE, reoptimize.times=1,
-                  likelihood.byrow=FALSE, debug=F, method="Nelder-Mead",
-                  .internal.init.optional=FALSE, .internal.cleanup=TRUE)
+                  optimize.incrementally=TRUE, reoptimize.times=1, 
+                  reoptimize.dprime=TRUE, reoptimize.criterion=TRUE, reoptimize.corr=TRUE,
+                  debug=F, method="Nelder-Mead", #"BHHH",
+                  .likelihood.byrow=FALSE, .internal.init.optional=FALSE, .internal.cleanup=TRUE, doit=F)
 {
   log = function(str) {
     if(debug) {
@@ -76,9 +79,9 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   satf.coefnames.core <- c('asymptote', 'invrate', 'intercept')
   bias.coefnames.core <- c('bias.max', 'bias.invrate', 'bias.intercept','bias.min')
   
-  return_value = function(estimates, LL) {
+  return_value = function(estimates, LL, SE=estimates*NaN, ci.upper=estimates*NaN, ci.lower=estimates*NaN) {
     # if( is.na(LL) ) estimates = estimates*NaN
-    list(estimates=estimates, LL=LL)
+    list(estimates=estimates, LL=LL, SE=SE, ci.upper=ci.upper, ci.lower=ci.lower)
   }
   
   # set defaults for start values and constraints
@@ -103,10 +106,10 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   # initialize start parameters and create constraint matrix  
   coefs <- init_coefs_and_constraints(coefnames=coefnames, start=start, constraints=constraints,
                                       coreparams=c(satf.coefnames.core, bias.coefnames.core))
-  # TODO: remove
-  coefs$constraints[,'upper'] = Inf
-  coefs$constraints[,'lower'] = -Inf
-  print(coefs$constraints)
+#  # TODO: remove
+#  coefs$constraints[,'upper'] = Inf
+#  coefs$constraints[,'lower'] = -Inf
+#  print(coefs$constraints)
   
   # initialize the C++ optimization routine
   if( !skip.initialization ) {
@@ -119,7 +122,7 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   names(start) <- names( coefs$start )
   
   if(all(names(start) %in% coefs$fixed.coefs)) {
-    if(likelihood.byrow) {
+    if(.likelihood.byrow) {
       logLik = compute_logLikFn(start, TRUE, TRUE)
       deinitialize_logLikFn()
       return( return_value( rcpp_constrain_coefs(start), logLik) )
@@ -134,7 +137,7 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   # make sure the start values yield a valid likelihood
   logLik = compute_logLikFn(start)
   if( is.na(logLik) ) {
-    if(likelihood.byrow)
+    if(.likelihood.byrow)
      	res = compute_logLikFn(start, TRUE, FALSE)
     start = rcpp_constrain_coefs(start)
     deinitialize_logLikFn()
@@ -142,18 +145,21 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
     return( return_value( start, logLik) )
     
   } else if( is.infinite(logLik) ) {
-    if(likelihood.byrow)
+    if(.likelihood.byrow)
       logLik = compute_logLikFn(start, TRUE, FALSE)
     start = rcpp_constrain_coefs(start)
     deinitialize_logLikFn()
     warning("Got Inf or -Inf on first iteration. Adjust start parameters.")
     return( return_value( start, logLik) )
   }
-  
+
+# TODO: Re-enable and do it again.
+#  if(doit ==T) {
 #  print( compareDerivatives(f=compute_logLikFn, grad=compute_logLikFn_gradient, t0=start) )
 #  stop()
-
-  optimize_subset <- function(variable, start, all=TRUE, selection=c()) {
+#  }
+  
+  optimize_subset <- function(variable, start, all=TRUE, selection=c(), method="Nelder-Mead") {
     .optimize_subset(variable, coefs$fixed.coefs, method, start, debug, data, selection)
   }
 
@@ -165,16 +171,18 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
     }
   }
   
+
+  original.start = start
+
   n.step = 0
   if(optimize.incrementally)
   {
-    # TODO: Implement the following.
-    reportifnot(!.internal.init.optional, "The package does not support optimize.incrementally=T with .internal.init.optional=T. It's on my to-do list.")
-    
     # ignore correlation parameter for now, if specified
     rcpp_set_coef_values( c(corr.mrsat=0) )
-    coeforder = append(dm$params.criterion, dm$params.dprime)
     
+    # TODO: Implement the following.
+    reportifnot(!.internal.init.optional, "The package does not support optimize.incrementally=T with .internal.init.optional=T. It's on my to-do list.")
+    coeforder = append(dm$params.criterion, dm$params.dprime)
     cur.start = start
     # optimize in steps on subsets of the data
     for(n.step in 1:length(coeforder)) {
@@ -188,29 +196,38 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
     if( !any(is.nan(cur.start)) ) {
         start = cur.start
     }
-    # re-enable the correlation coefficient
+    # optimize all of them
+    log_step_n(n.step+1)
+    start = optimize_subset(variable=c(unlist(dm$params.dprime), unlist(dm$params.criterion)), start=start, method=method) 
+    
+    # re-enable and optimize the correlation coefficient
     rcpp_reset_coef_ranges( 'corr.mrsat' )
+    log_step_n(n.step+2)
+    estimates = optimize_subset(variable='corr.mrsat', start=start, method=method) 
+    if(any(is.na(estimates))) # Optimizing subsets of parameters has failed. Optimize over all of them together.
+    {
+      start = original.start
+      reoptimize.dprime = TRUE
+      reoptimize.criterion = TRUE
+      reoptimize.corr = TRUE
+    } else {
+      start = estimates
+    }
   }
-# TODO: uncomment
-  # optimize the correlation coefficient
-  log_step_n(n.step+1)
-  start = optimize_subset(variable='corr.mrsat', start=start) 
-  
+
+    
   # reoptimize dprime or more parameters
-  free.variables = unlist(dm$params.dprime)
+  free.variables = c()
+  if(reoptimize.dprime)    free.variables = c(free.variables, unlist(dm$params.dprime))
   if(reoptimize.criterion) free.variables = c(free.variables, unlist(dm$params.criterion))
   if(reoptimize.corr)      free.variables = c(free.variables, 'corr.mrsat') 
   for(i in 1:reoptimize.times) {  
-    log_step_n(n.step+i+1)
-    estimates = optimize_subset(variable=free.variables, start=start)
+    log_step_n(n.step+i+2)
+    estimates = optimize_subset(variable=free.variables, start=start, method=method)
     start = estimates
-    
-    print( compareDerivatives(f=compute_logLikFn, grad=compute_logLikFn_gradient, t0=start) )
-    stop()
-    
   }
 
-  if(likelihood.byrow) {
+  if(.likelihood.byrow) {
     logLik = compute_logLikFn(coefs=estimates, by_row=TRUE)
     estimates = rcpp_constrain_coefs(estimates)
     deinitialize_logLikFn()
@@ -219,12 +236,14 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
 
   # recompute the likelihood for the entire dataset
   logLik <- compute_logLikFn( coefs= estimates, by_row=FALSE)
-  estimates = rcpp_constrain_coefs(estimates)
+  constrained.estimates = rcpp_constrain_coefs(estimates)
   deinitialize_logLikFn()
-  return( return_value(estimates , logLik) )
+
+  return( return_value(estimates=constrained.estimates, logLik, attr(estimates, "SE"), 
+                       attr(estimates, "CI.upper"), attr(estimates, "CI.lower")) )
 }
 
-.optimize_subset <- function(variable, fixed, method, start, debug, data, selection)
+.optimize_subset <- function(variable, fixed, method, start, debug, data, selection, nosummary=TRUE)
 {
   # NOTE: 'fixed' overrides 'variable'
   # extract start values if necessary
@@ -241,10 +260,20 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   if( all(fixed) )
     return(original.start)
   
-  # set gradient, etc.
-  # transform the parameters into their proper (constrained) form
+  n.free = sum(!fixed)
+  if(n.free == 1 && method=="Nelder-Mead") {
+    method = "CG" # Nelder-Mead can't handle one-parameter optimization
+  }
+    
   fnLogLik = compute_logLikFn
-  fnLogLikGradient = compute_logLikFn_gradient
+  
+  # set gradient, etc.
+  if(method == "Nelder-Mead")
+    fnLogLikGradient = NULL
+  else if(method == "BHHH")
+    fnLogLikGradient = compute_logLikFn_gradient_BHHH
+  else
+    fnLogLikGradient = compute_logLikFn_gradient
   
   if(debug) print.level=0
   else      print.level=0
@@ -259,54 +288,86 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
     cat(sprintf("optimizing: %s\n", paste(variable.coefnames, collapse=', ') ))
     cat(sprintf("data points: %d\n", length(rcpp_return_selection()) ))
   }
-
-  n.free = sum(!fixed)
-  if(FALSE) { #n.free == 1) {
-    # TODO: This optimization routine produces warnings when the objective function returns NA. Fix this
-    # TODO: Reevaluate upper and lower boundary. -6 and 6 work for transformed parameters and for most untransformed parameters for now.
-    estimates = start
-    fnLogLikTmp = function(p) {estimates[!fixed] = p; ll = fnLogLik(estimates); ifelse(ll==-Inf || is.nan(ll), -.Machine$double.xmax, ll);  }
-    res.optim = optimize(fnLogLikTmp, lower=-6, upper=6, maximum=TRUE)
-    estimates[!fixed] = res.optim$maximum
-    
-  } else if(method == "Nelder-Mead") {
-    fnLogLikGradient = compute_logLikFn_gradient_BHHH
-    method = "BHHH"#"NR"#"BFGS"
-    generate_parscale <- function(par) {pmax(abs(start), .1) }
+  
+  generate_parscale <- function(start) {pmax(abs(start), .1)}
+  
+  logLik = compute_logLikFn(start)
+  if(is.na(logLik) || is.infinite(logLik)) {
+    estimates = start*NaN     
+    attr(estimates, "SE") <- start*NaN
+    attr(estimates, "CI.upper") <- start*NaN
+    attr(estimates, "CI.lower") <- start*NaN
+    rcpp_reset_selection()
+    return(estimates)
+  }
+  if(method=="Nelder-Mead") {
     res = maxLik(logLik=fnLogLik, grad=fnLogLikGradient, start=start, fixed=fixed,
-                 iterlim=10^6, method=method, #parscale=generate_parscale(start), 
-                 print.level=print.level)
-    i = 0
-    while(res$code == 10) { ## try restarting optimization 10 times if the simplex degenerates
-      i = i + 1
-      if(i > 10) break;
-      start = coef(res)
+                 iterlim=10^6, method=method, print.level=print.level, parscale=generate_parscale(start))
+  } else {
+    res = maxLik(logLik=fnLogLik, grad=fnLogLikGradient, start=start, fixed=fixed,
+                 iterlim=10^6, method=method, print.level=print.level)
+  }
+  i = 0
+  switched_to_NM = FALSE
+  while(res$code %in% c(3)) {  ## 100: Initial value out of range. 3: Boundary of parameter space.
+    warning("Optimization routine got code 3. Restarting with Nelder-Mead.")
+    cat("Optimization routine got code 3. Restarting with Nelder-Mead.\n")
+    method = "Nelder-Mead"
+    if(!nosummary)
+      print(summary(res))
+    switched_to_NM = TRUE
+    i = i + 1
+    if(i > 10) {
+      break;
+    }
+    start = coef(res)
+    if(method=="Nelder-Mead") {
       res = maxLik(logLik=fnLogLik, grad=fnLogLikGradient, start=start, fixed=fixed,
-                   iterlim=10^6, method=method, #parscale=generate_parscale(start), 
-                   print.level=print.level)
-    }
-    if(debug) {
-      cat(sprintf("method: %s\n", method))
-      cat(sprintf("code: %d\n", res$code))
-      cat(sprintf("iterations: %d\n", res$iterations))
-    }
-    if(res$code == 100) { ## Initial value out of range.
-      estimates = start*NaN     
+                   iterlim=10^6, method=method, print.level=print.level, parscale=generate_parscale(start))
     } else {
-      estimates = coef(res)
-      attr(estimates, "SE") <- coef(summary(res))[,'Std. error']
+      res = maxLik(logLik=fnLogLik, grad=fnLogLikGradient, start=start, fixed=fixed,
+                   iterlim=10^6, method=method, print.level=print.level)
+    }
+    if(debug && !nosummary) {
       print(summary(res))
     }
-  } else {
-    stop("This optimization method is not implemented.")
-    ## res = maxLik(logLik=fnLogLik, grad=compute_logLikFn_gradient, start=start, fixed=fixed, iterlim=10^6, 
-    ##             method="Nelder-Mead", print.level=print.level)
   }
+#  if(switched_to_NM) {
+#    start = coef(res)
+#    res = maxLik(logLik=fnLogLik, grad=fnLogLikGradient, start=start, fixed=fixed,
+#                 iterlim=10^6, method=method, print.level=print.level)
+#  }
   if(debug) {
-    cat("coefs")
+    cat(sprintf("method: %s\n", method))
+    cat(sprintf("code: %d\n", res$code))
+    cat(sprintf("iterations: %d\n", res$iterations))
+    if(!nosummary)
+      print(summary(res))
+  }
+  if(res$code %in% c(3,100)) { ## 100: Initial value out of range. 3: Boundary of parameter space.
+    estimates = start*NaN     
+    se = start*NaN
+  } else {
+    estimates = coef(res)
+    if(nosummary)
+      se = start*NaN
+    else
+      se = coef(summary(res))[,'Std. error']
+  }
+  attr(estimates, "SE") <- se
+  ci.upper = rcpp_constrain_coefs(estimates + 2*se)
+  ci.lower = rcpp_constrain_coefs(estimates - 2*se)
+  attr(estimates, "CI.upper") <- ci.upper
+  attr(estimates, "CI.lower") <- ci.lower
+  
+  if(debug) {
+    cat("coefs\n")
     constrained.coefs = rcpp_constrain_coefs( estimates )
     idx = which(names(constrained.coefs)%in%variable.coefnames)
     names(constrained.coefs)[idx] = paste0('*',names(constrained.coefs)[idx],'*')
+    newnames = names(constrained.coefs)
+    constrained.coefs = sprintf("%.2f (%.2f;%.2f)", constrained.coefs, ci.upper, ci.lower)
+    names(constrained.coefs) = newnames
     print(constrained.coefs)
     old.LL = compute_logLikFn( coefs=start, by_row=FALSE)
     new.LL = compute_logLikFn( coefs=estimates, by_row=FALSE)

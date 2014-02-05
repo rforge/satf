@@ -101,7 +101,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // rcpp_compute_logLikFn_gradient
-DoubleVector rcpp_compute_logLikFn_gradient(DoubleVector& coefs, bool by_row = false, bool tolerate_imprecision = true);
+NumericMatrix rcpp_compute_logLikFn_gradient(DoubleVector& coefs, bool by_row = false, bool tolerate_imprecision = true);
 RcppExport SEXP satf_rcpp_compute_logLikFn_gradient(SEXP coefsSEXP, SEXP by_rowSEXP, SEXP tolerate_imprecisionSEXP) {
 BEGIN_RCPP
     SEXP __sexp_result;
@@ -110,7 +110,7 @@ BEGIN_RCPP
         Rcpp::traits::input_parameter< DoubleVector& >::type coefs(coefsSEXP );
         Rcpp::traits::input_parameter< bool >::type by_row(by_rowSEXP );
         Rcpp::traits::input_parameter< bool >::type tolerate_imprecision(tolerate_imprecisionSEXP );
-        DoubleVector __result = rcpp_compute_logLikFn_gradient(coefs, by_row, tolerate_imprecision);
+        NumericMatrix __result = rcpp_compute_logLikFn_gradient(coefs, by_row, tolerate_imprecision);
         PROTECT(__sexp_result = Rcpp::wrap(__result));
     }
     UNPROTECT(1);
@@ -223,6 +223,24 @@ BEGIN_RCPP
         Rcpp::traits::input_parameter< double >::type rho(rhoSEXP );
         Rcpp::traits::input_parameter< bool >::type second_order(second_orderSEXP );
         double __result = rcpp_pnorm2d(x_lower, y_lower, rho, second_order);
+        PROTECT(__sexp_result = Rcpp::wrap(__result));
+    }
+    UNPROTECT(1);
+    return __sexp_result;
+END_RCPP
+}
+// rcpp_pnorm2d_derivative_by_rho
+double rcpp_pnorm2d_derivative_by_rho(double a, double b, double rho, bool second_order);
+RcppExport SEXP satf_rcpp_pnorm2d_derivative_by_rho(SEXP aSEXP, SEXP bSEXP, SEXP rhoSEXP, SEXP second_orderSEXP) {
+BEGIN_RCPP
+    SEXP __sexp_result;
+    {
+        Rcpp::RNGScope __rngScope;
+        Rcpp::traits::input_parameter< double >::type a(aSEXP );
+        Rcpp::traits::input_parameter< double >::type b(bSEXP );
+        Rcpp::traits::input_parameter< double >::type rho(rhoSEXP );
+        Rcpp::traits::input_parameter< bool >::type second_order(second_orderSEXP );
+        double __result = rcpp_pnorm2d_derivative_by_rho(a, b, rho, second_order);
         PROTECT(__sexp_result = Rcpp::wrap(__result));
     }
     UNPROTECT(1);

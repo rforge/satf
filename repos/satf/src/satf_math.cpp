@@ -13,35 +13,25 @@
 namespace AlbersKallenberg1994 {
   
   // derivative of the normal distribution density function
-/*  double _ddddnorm( double x) {
-    return -(1/2)*M_SQRT2*x*exp(-(1/2)*x*x)*(-3+x*x)*(M_2_SQRTPI/2);
+  inline double _dddnorm( double x) {
+    return _dnorm(x)*(x*x - 1);
   }
-*/
   inline double _ddnorm(double x) {
     return -(_dnorm(x)*x);
-  }
-  // TODO: optimize this a bit
-  double _dddnorm( double x) {
-    return _dnorm(x)*(x*x - 1);
-//    return -(_ddnorm(x))*x - _dnorm(x);
   }
   
   inline double f_theta(double rho) {
     return (sqrt(1 - (rho*rho) )/rho);
   }
-  
   inline double f_c(double rho, double a, double b) {
     return (rho*a - b)/ sqrt(1-(rho*rho));
   }  
-  
   inline double f_eta(double c) {
     return _pnorm(-c);
   }
-  
   inline double f_c1(double c, double eta) {
     return (_dnorm(c) / eta);
   }
-
   inline double f_zeta(double a, double theta, double c, double c1) {
     return (a + theta*(c1 - c));
   }
@@ -72,7 +62,8 @@ namespace AlbersKallenberg1994 {
   }
 
 inline double _pnorm2d_derivative_by_ab(double a, double b, double rho, 
-                                          double a_deriv, double b_deriv, bool smaller, bool second_order=true)
+                                          double a_deriv, double b_deriv, 
+                                          bool smaller, bool second_order=true)
   {
      double rho_square = rho*rho;
      double theta = f_theta(rho);

@@ -61,6 +61,10 @@ rcpp_pnorm2d <- function(x_lower, y_lower, rho, second_order) {
     .Call('satf_rcpp_pnorm2d', PACKAGE = 'satf', x_lower, y_lower, rho, second_order)
 }
 
+rcpp_pnorm2d_derivative_by_rho <- function(a, b, rho, second_order) {
+    .Call('satf_rcpp_pnorm2d_derivative_by_rho', PACKAGE = 'satf', a, b, rho, second_order)
+}
+
 rcpp_correlate <- function(trial_id, noise, rho_vec) {
     .Call('satf_rcpp_correlate', PACKAGE = 'satf', trial_id, noise, rho_vec)
 }
