@@ -81,7 +81,7 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   
   return_value = function(estimates, LL, SE=estimates*NaN, ci.upper=estimates*NaN, ci.lower=estimates*NaN) {
     # if( is.na(LL) ) estimates = estimates*NaN
-    list(estimates=estimates, LL=LL, SE=SE, ci.upper=ci.upper, ci.lower=ci.lower)
+    list(estimates=estimates, LL=LL)#, SE=SE, ci.upper=ci.upper, ci.lower=ci.lower)
   }
   
   # set defaults for start values and constraints
