@@ -31,7 +31,7 @@ satf_aggregate_nyes <- function(data, id, time.id=c(), signal='signal',
   data
 }
 
-satf_aggregate_dprime <- function(data, id, signal, dv=NULL) {
+satf_aggregate_dprime <- function(data, id, signal, dv=NULL, flat.min=0.5) {
   if(is.null(dv))
     dv <- c('n.responses.yes', 'n.responses')
   
@@ -49,7 +49,7 @@ satf_aggregate_dprime <- function(data, id, signal, dv=NULL) {
     d.signal[[ dv[2] ]] <- NULL
     
     summary <- ldply(1:nrow(d.signal), function(i) {
-      compute_dprime(hits=hits[i], misses=misses[i], fas=fas, crs=crs)
+      compute_dprime(hits=hits[i], misses=misses[i], fas=fas, crs=crs, flat.min=flat.min)
     })
     cbind(d.signal, summary)
   })

@@ -99,14 +99,14 @@ Rcpp::DoubleVector CDataContainer::ObjectiveFunction(DoubleVector& raw_coefs, bo
   _dbg_method("ObjectiveFunction", 1);
 
   if(mObjectiveFunctionCalls == 0)
-    force_update = true;
-  
-  force_update = mForceUpdate || force_update;
-  mForceUpdate = false;
-  mObjectiveFunctionCalls++;
+    mForceUpdate = true;
+  mForceUpdate = mForceUpdate || force_update;
 
-// TODO: remove
-//  mForceUpdate = true;
+  // TODO: Ensure on-demand updating works.
+  mForceUpdate = true;
+
+  // initialize coefficients
+  CCoefs coefs =  CCoefs(raw_coefs, CCoefs::FnConstrain, false, mCoefConstraints); //, &mLastCoefs);
 
   int n_llvector_len = by_row ? mDatapoints.size() : 1;
   DoubleVector LLVector(n_llvector_len);
@@ -114,20 +114,16 @@ Rcpp::DoubleVector CDataContainer::ObjectiveFunction(DoubleVector& raw_coefs, bo
       LLVector[i] = 0.0;
   }
 
-  // TODO: use mLastCoefs. They aren't being used as of now.
-  // initialize coefficients
-  CCoefs coefs =  CCoefs(raw_coefs, CCoefs::FnConstrain, false, mCoefConstraints);
-
   for(size_t i=0; i < mUniqueDMRows.size(); i++)
   {
     if(mEnabled[i] ) {
         _dbg((0, "updating parameter for enabled dm row %d/%d", i, mUniqueDMRows.size() )); 
-        mUniqueDMRows[i].ObjectiveFunction(coefs, force_update, mDatapoints, &LLVector);
+        mUniqueDMRows[i].ObjectiveFunction(coefs, mForceUpdate, mDatapoints, &LLVector);
     } else {
         // Computation of log-likelihood on the disabled part of the dataset is meant to ensure that optimization on the selected part does not yield
         // estimates which are invalid for the disabled part. The result is discarded unless it's NaN.
         _dbg((0, "updating parameter for disabled dm row %d/%d", i, mUniqueDMRows.size() )); 
-        bool LL_defined = mUniqueDMRows[i].ObjectiveFunction(coefs, force_update, mDatapoints, NULL);
+        bool LL_defined = mUniqueDMRows[i].ObjectiveFunction(coefs, mForceUpdate, mDatapoints, NULL);
         if(!by_row && !LL_defined) {
           LLVector[0] = R_NaN;
           return LLVector;
@@ -135,6 +131,9 @@ Rcpp::DoubleVector CDataContainer::ObjectiveFunction(DoubleVector& raw_coefs, bo
     }
   }
   mLastCoefs = coefs;
+  mForceUpdate = false;
+  mObjectiveFunctionCalls++;
+  
   _dbg((0, "returning")); 
   return LLVector;
 }
@@ -144,18 +143,14 @@ Rcpp::NumericMatrix CDataContainer::ObjectiveFunctionGradient(DoubleVector& raw_
   _dbg_method("ObjectiveFunctionGradient", 1);
 
   if(mObjectiveFunctionCalls == 0)
-    force_update = true;
-  
-  force_update = mForceUpdate || force_update;
-  mForceUpdate = false;
-  mObjectiveFunctionCalls++;
+    mForceUpdate = true;
+  mForceUpdate = mForceUpdate || force_update;
 
-// TODO: remove
+  // TODO: Ensure on-demand updating works.
   mForceUpdate = true;
-
-  // TODO: use mLastCoefs. They aren't being used as of now.
+  
   // initialize coefficients
-  CCoefs coefs =  CCoefs(raw_coefs, CCoefs::FnConstrain, false, mCoefConstraints);
+  CCoefs coefs =  CCoefs(raw_coefs, CCoefs::FnConstrain, false, mCoefConstraints); //, &mLastCoefs);
 
   int nrows = by_row ? mDatapoints.size() : 1;
   int ncols = coefs.size();
@@ -176,6 +171,11 @@ Rcpp::NumericMatrix CDataContainer::ObjectiveFunctionGradient(DoubleVector& raw_
   _dbg((0, "all gradients obtained")); 
   // TODO: the next line causes some sort of error, not sure why
   // mLastCoefs = coefs;
+
+/*  mLastCoefs = coefs;
+  mForceUpdate = false;
+  mObjectiveFunctionCalls++;
+*/
   return LLGradient;
 }
 

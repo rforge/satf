@@ -11,10 +11,11 @@ NumSmallest <- -.Machine$double.xmax
 NumLargest <- .Machine$double.xmax
 
 
-compute_logLikFn <- function(coefs, by_row=FALSE, force_update=FALSE) {
+compute_logLikFn <- function(coefs, by_row=FALSE, force_update=FALSE, invert=FALSE) {
 	res = rcpp_compute_logLikFn(coefs, by_row, FALSE, force_update)
 #  print(res)
-  res
+  if(invert) return(-res)
+  else       return(res)
 }
 
 compute_logLikFn_gradient <- function(coefs, by_row=FALSE) {
@@ -53,11 +54,10 @@ satf_gridsearch <- function(start, constraints, ...) {
   start.vec[[which.max(logLik.vec)]]
 }
 
-satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.id=NULL, constraints=list(), 
-                  optimize.incrementally=TRUE, reoptimize.times=1, 
-                  reoptimize.dprime=TRUE, reoptimize.criterion=TRUE, reoptimize.corr=TRUE,
-                  debug=F, method="Nelder-Mead", #"BHHH",
-                  .likelihood.byrow=FALSE, .internal.init.optional=FALSE, .internal.cleanup=TRUE, doit=F)
+satf <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.id=NULL, constraints=list(), 
+                  optimize.incrementally=FALSE, reoptimize.dprime=TRUE, reoptimize.criterion=TRUE, reoptimize.corr=TRUE,
+                  reoptimize.times=1, method="SUBPLEX", # "Nelder-Mead", #"BHHH",
+                  debug=F, .likelihood.byrow=FALSE, .internal.init.optional=FALSE, .internal.cleanup=TRUE, doit=F)
 {
   log = function(str) {
     if(debug) {
@@ -79,7 +79,7 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   satf.coefnames.core <- c('asymptote', 'invrate', 'intercept')
   bias.coefnames.core <- c('bias.max', 'bias.invrate', 'bias.intercept','bias.min')
   
-  return_value = function(estimates, LL, SE=estimates*NaN, ci.upper=estimates*NaN, ci.lower=estimates*NaN) {
+  return_value = function(estimates, LL) {
     # if( is.na(LL) ) estimates = estimates*NaN
     list(estimates=estimates, LL=LL)#, SE=SE, ci.upper=ci.upper, ci.lower=ci.lower)
   }
@@ -239,8 +239,7 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   constrained.estimates = rcpp_constrain_coefs(estimates)
   deinitialize_logLikFn()
 
-  return( return_value(estimates=constrained.estimates, logLik, attr(estimates, "SE"), 
-                       attr(estimates, "CI.upper"), attr(estimates, "CI.lower")) )
+  return( return_value(estimates=constrained.estimates, logLik) )
 }
 
 .optimize_subset <- function(variable, fixed, method, start, debug, data, selection, nosummary=TRUE)
@@ -294,13 +293,19 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
   logLik = compute_logLikFn(start)
   if(is.na(logLik) || is.infinite(logLik)) {
     estimates = start*NaN     
-    attr(estimates, "SE") <- start*NaN
-    attr(estimates, "CI.upper") <- start*NaN
-    attr(estimates, "CI.lower") <- start*NaN
     rcpp_reset_selection()
     return(estimates)
   }
-  if(method=="Nelder-Mead") {
+  if(method=="SUBPLEX") {
+    reportifnot(all(!fixed), "Fixed parameters not yet supported when using SUBPLEX.")
+    res = nloptr(x0=start, eval_f=fnLogLik, by_row=FALSE, force_update=FALSE, invert=TRUE, opts=list(algorithm="NLOPT_LN_SBPLX", maxeval=10^6))
+    # TODO: translate status to code (maxLik codes) if necessary
+    mapped.res = list(code=res$status, iterations = res$iterations, estimates=res$solution) 
+    names(mapped.res$estimates) = names(start)
+    res = mapped.res
+    nosummary = TRUE
+    coef = function(obj) obj$estimates
+  } else if(method=="Nelder-Mead") {
     res = maxLik(logLik=fnLogLik, grad=fnLogLikGradient, start=start, fixed=fixed,
                  iterlim=10^6, method=method, print.level=print.level, parscale=generate_parscale(start))
   } else {
@@ -354,11 +359,6 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
     else
       se = coef(summary(res))[,'Std. error']
   }
-  attr(estimates, "SE") <- se
-  ci.upper = rcpp_constrain_coefs(estimates + 2*se)
-  ci.lower = rcpp_constrain_coefs(estimates - 2*se)
-  attr(estimates, "CI.upper") <- ci.upper
-  attr(estimates, "CI.lower") <- ci.lower
   
   if(debug) {
     cat("coefs\n")
@@ -366,7 +366,7 @@ satf  <- function(dv, signal, start, contrasts, bias, data, time, metric, trial.
     idx = which(names(constrained.coefs)%in%variable.coefnames)
     names(constrained.coefs)[idx] = paste0('*',names(constrained.coefs)[idx],'*')
     newnames = names(constrained.coefs)
-    constrained.coefs = sprintf("%.2f (%.2f;%.2f)", constrained.coefs, ci.upper, ci.lower)
+    constrained.coefs = sprintf("%.2f", constrained.coefs)
     names(constrained.coefs) = newnames
     print(constrained.coefs)
     old.LL = compute_logLikFn( coefs=start, by_row=FALSE)

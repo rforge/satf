@@ -192,13 +192,3 @@ NumericVector rcpp_get_constraints_upper() {
   return Rcpp::wrap(zzz->mCoefConstraints.mCoefsUpper);
 }
 */
-
-#if 0
-  #include "satf.cpp"
-  #include "satf_math.cpp"
-  #include "debug.cpp"
-  #include "datapoint.cpp"
-  #include "design_matrix_new.cpp"
-  #include "coefs.cpp"
-  #include "data.cpp"
-#endif

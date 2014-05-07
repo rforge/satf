@@ -4,31 +4,35 @@
 \description{
   Fit SATF function to response-signal data. 
 }
-\usage{
-  satf(dv, signal, contrasts, contraints, start, data, plot=NULL,
-        metric="logLikRaw")
 
-(p <- satf(signal=,
-           start     = c(asymptote=2.1, invrate=1, intercept=.4),
-           contrasts = c(asymptote=~1, invrate=~1, intercept=~1), 
-           constraints=list(), time=~time, 
-           bias=list(bias=~1, poly.degree=10), # trial.id=~trial.id,
-           data=data, metric="logLikRaw")) # "logLikRaw"
+
+\usage{
+  satf(dv, signal, start, contrasts, bias, data, time, metric,                   
+     constraints = list(), trial.id = NULL, reoptimize.times = 1, method = "SUBPLEX", debug = F,
+     optimize.incrementally = FALSE, reoptimize.dprime = TRUE, 
+     reoptimize.criterion = TRUE, reoptimize.corr = TRUE)
+
+(m.raw <- satf(dv=c(response=~response), signal=~signal, 
+               start = c(asymptote=2, invrate=1, intercept=.4, bias.max=1, bias.invrate=1, bias.intercept=-1, bias.min=0),
+               contrasts = c(asymptote=~1+c2, invrate=~1+c2, intercept=~1+c2),
+               bias = ~1+c2, constraints=list(), time=~time, trial.id=~trial.id,
+               data=data, metric="logLikRaw", debug=T, method="Nelder-Mead", optimize.incrementally=FALSE, reoptimize.times=5))
 
 }
 \arguments{
-  \item{dv}{
-  Either list(response=~...), or list(n.responses.yes=~..., n.responses=~...), or list(dprime=...).
+  \item{dv}{ A named list with one or two formulae specifying the dependent variable column(s). Either list(response=~...), or list(n.responses.yes=~..., n.responses=~...).
+  %, or list(dprime=...).
   }
-  \item{signal}{Formula specifying a column which species whether the datapoint is a signal or not.}
-  \item{start}{A named vector with start values.}
-  \item{contrasts}{A names specifying the contrasts for all SATF parameters.}
-  \item{constraints}{
-        A named list of constraints for all coeficients. The default is such that all parameters mentioned by name in contrasts (i.e., all intercepts) are set to positive. All slopes are unconstrained.
+  \item{signal}{A formula specifying a column which indicates whether the datapoint is from a signal trial or from a noise trial.}
+  \item{contrasts}{A named list specifying the contrasts for SATF parameters. Contrasts for 'asymptote', 'invrate', and 'intercept' have to be provided. For example, contrasts=list(asymptote=~1, invrate=~1, intercept=~1) requests only one common asymptote to be estimated.}
+  \item{start}{A named vector with start values, e.g. c(asymptote=2, invrate=1, intercept=.5). }
+
+  \item{constraints}{A named list of constraints for all coeficients. Default constraints set the asymptote, invrate and intercept parameters to be strictly positive. Constraints can apply to one parameters (e.g., constraints=list('asymptote'=c(0, 2))), or can use regular expressions to constrain several parameters (e.g., constraints=list('asymptote.c.*'=c(0, 2))).
   }
-  \item{time}{Formula specifying the time column.}
-  \item{trial.id}{Formula specifying the trial id column.}
-  \item{bias}{Named list with the elements 'bias' and 'poly.degree'. 'bias' is a formula specifying for which datapoints the bias is supposed to be determined separately. 'poly.degree' is an integer specifying the degree of the polynomial fit to the criterion data.}
+  \item{time}{A formula specifying the time column (e.g., time=~time).}
+  \item{trial.id}{A formula specifying the trial id column  (e.g., trial.id=~trial). The trial id is necessary to account for within-trial correlation of responses if the data is from a MR-SAT experiment.}
+
+  \item{bias}{Either a formula, or a named list specifying contrasts for the decition criterion. If a named list is provided, the components (bias.max, bias.invrate, bias.intercept, bias.min) have to provide formulae specifying the constrasts for these parameters. If the contrasts are the same for all parameters of the criterion function, one formula can be provided. (The bias is ) }
   \item{data}{data.frame containing the data.}
   \item{metric}{String specifying the metric by which to fit the model. }
 
